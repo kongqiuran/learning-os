@@ -7,53 +7,71 @@ from src.loader import extract_text_from_files
 
 st.set_page_config(
     page_title="Learning OS",
-    page_icon="📚",
+    page_icon="LO",
     layout="wide",
 )
 
 st.title("Learning OS")
-st.caption("课程资料 -> AI 期末复习包")
+st.caption("Course materials -> AI review pack")
 
 with st.sidebar:
-    st.header("生成设置")
-    course_name = st.text_input("课程名称", value="半导体物理")
-    output_name = st.text_input("输出文件名", value="")
+    st.header("Generation settings")
+    course_name = st.text_input("Course name", value="Semiconductor Physics")
+    output_name = st.text_input("Output filename", value="")
     st.divider()
-    st.write("支持格式：PDF、PPTX、TXT、MD")
+    st.write("Supported formats: PDF, PPTX, TXT, MD")
 
 uploaded_files = st.file_uploader(
-    "上传课程资料",
+    "Upload course materials",
     type=["pdf", "pptx", "txt", "md"],
     accept_multiple_files=True,
 )
 
-generate_button = st.button("生成复习包", type="primary", disabled=not uploaded_files)
+generate_button = st.button(
+    "Generate review pack",
+    type="primary",
+    disabled=not uploaded_files,
+)
 
 if generate_button:
-    with st.status("正在整理课程资料...", expanded=True) as status:
-        st.write("正在提取文字")
-        documents = extract_text_from_files(uploaded_files)
-
-        if not documents:
-            st.error("没有提取到可用文字，请换一份资料试试。")
+    with st.status("Processing course materials...", expanded=True) as status:
+        st.write("Extracting text")
+        try:
+            documents = extract_text_from_files(uploaded_files)
+        except Exception as exc:
+            status.update(label="Text extraction failed", state="error")
+            st.error(f"Text extraction failed: {exc}")
             st.stop()
 
-        st.write("正在生成复习包")
-        review_pack = generate_review_pack(course_name=course_name, documents=documents)
+        if not documents:
+            status.update(label="No usable text found", state="error")
+            st.error("No usable text was extracted. Please try another file.")
+            st.stop()
+
+        st.write("Generating review pack")
+        try:
+            review_pack = generate_review_pack(
+                course_name=course_name,
+                documents=documents,
+            )
+        except Exception as exc:
+            status.update(label="Review pack generation failed", state="error")
+            st.error(f"Review pack generation failed: {exc}")
+            st.stop()
 
         filename = output_name.strip() or build_output_filename(course_name)
         saved_path = save_markdown(review_pack, filename)
 
-        status.update(label="复习包生成完成", state="complete")
+        status.update(label="Review pack generated", state="complete")
 
-    st.success(f"已生成：{saved_path}")
+    download_filename = filename if filename.endswith(".md") else f"{filename}.md"
+    st.success(f"Saved to: {saved_path}")
     st.download_button(
-        label="下载 Markdown 复习包",
+        label="Download Markdown review pack",
         data=review_pack,
-        file_name=filename,
+        file_name=download_filename,
         mime="text/markdown",
     )
     st.markdown(review_pack)
 else:
-    st.info("先上传一份或多份课程资料，然后点击生成复习包。")
-
+    st.info("Upload one or more course files, then generate a review pack.")

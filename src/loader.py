@@ -37,23 +37,28 @@ def extract_text_from_file(file):
 def extract_pdf_text(data):
     reader = PdfReader(BytesIO(data))
     pages = []
+
     for index, page in enumerate(reader.pages, start=1):
         text = page.extract_text() or ""
         if text.strip():
-            pages.append(f"## 第 {index} 页\n{text}")
+            pages.append(f"## Page {index}\n{text}")
+
     return "\n\n".join(pages)
 
 
 def extract_pptx_text(data):
     presentation = Presentation(BytesIO(data))
     slides = []
+
     for index, slide in enumerate(presentation.slides, start=1):
         lines = []
         for shape in slide.shapes:
             if hasattr(shape, "text") and shape.text.strip():
                 lines.append(shape.text.strip())
+
         if lines:
-            slides.append(f"## 第 {index} 页幻灯片\n" + "\n".join(lines))
+            slides.append(f"## Slide {index}\n" + "\n".join(lines))
+
     return "\n\n".join(slides)
 
 
@@ -62,4 +67,3 @@ def _read_file_bytes(file):
         file.seek(0)
         return file.read()
     return Path(file).read_bytes()
-

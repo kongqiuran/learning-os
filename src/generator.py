@@ -10,7 +10,13 @@ def generate_review_pack(course_name, documents):
         return build_missing_api_key_message(course_name, documents)
 
     content = combine_documents(documents, max_chars=MAX_CHARS_PER_REQUEST)
-    prompt = REVIEW_PACK_USER_PROMPT.format(course_name=course_name, content=content)
+    if not content:
+        raise ValueError("No course text is available for generation.")
+
+    prompt = REVIEW_PACK_USER_PROMPT.format(
+        course_name=course_name,
+        content=content,
+    )
 
     client = OpenAI(api_key=OPENAI_API_KEY)
     response = client.chat.completions.create(
@@ -21,30 +27,32 @@ def generate_review_pack(course_name, documents):
         ],
         temperature=0.3,
     )
-    return response.choices[0].message.content.strip()
+
+    result = response.choices[0].message.content or ""
+    return result.strip()
 
 
 def build_missing_api_key_message(course_name, documents):
     filenames = "\n".join(f"- {document['filename']}" for document in documents)
-    return f"""# 《{course_name}》期末复习包
 
-当前还没有配置 OpenAI API Key，所以没有真正调用 AI。
+    return f"""# {course_name} review pack
 
-请复制 `.env.example` 为 `.env`，填入：
+OpenAI API key is not configured yet, so the app did not call the model.
+
+Create a `.env` file from `.env.example`, then fill in:
 
 ```env
-OPENAI_API_KEY=你的 API Key
+OPENAI_API_KEY=your_api_key_here
 MODEL_NAME=gpt-4o-mini
 ```
 
-然后重新运行：
+Then restart the app:
 
 ```bash
 streamlit run app.py
 ```
 
-已读取到的资料：
+Files already read:
 
 {filenames}
 """
-
