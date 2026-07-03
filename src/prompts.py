@@ -11,12 +11,12 @@ The final review pack must be written in Simplified Chinese.
 
 
 REVIEW_PACK_USER_PROMPT = """
-Create a final exam review pack for the course: {course_name}.
+Create a final exam sprint review pack for the course: {course_name}.
 
 Requirements:
 1. Output Markdown only.
 2. Write in Simplified Chinese.
-3. Make the content useful for exam review, not like an academic essay.
+3. Make the content useful for Chinese university students before final exams.
 4. Extract key concepts, formulas, problem types, common mistakes, and review
    tasks from the provided materials.
 5. If examples, homework, or calculation problems appear in the materials,
@@ -24,21 +24,21 @@ Requirements:
 6. Do not fabricate exact answers or teacher-specific claims that are not in
    the materials.
 
-Use this Markdown structure:
+Use this Markdown structure and keep the headings in Chinese:
 
-# Course final review pack
+# 《{course_name}》期末冲刺复习包
 
-## 1. Core exam points
+## 一、考点总结
 
-## 2. Formula sheet
+## 二、公式表
 
-## 3. Problem type classification
+## 三、题型分类
 
-## 4. Common mistakes
+## 四、易错点
 
-## 5. Mock exam
+## 五、模拟卷
 
-## 6. Seven-day review plan
+## 六、7 天复习计划
 
 Course materials:
 
