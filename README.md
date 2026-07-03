@@ -81,7 +81,7 @@ install.bat
 LLM_PROVIDER=deepseek
 LLM_API_KEY=你的 DeepSeek API Key
 LLM_BASE_URL=https://api.deepseek.com
-LLM_MODEL=deepseek-chat
+LLM_MODEL=deepseek-v4-flash
 ```
 
 注意：
@@ -121,7 +121,7 @@ ExamPilot 支持任何兼容 OpenAI Chat Completions API 的模型服务，不�
 LLM_PROVIDER=deepseek
 LLM_API_KEY=your_api_key_here
 LLM_BASE_URL=https://api.deepseek.com
-LLM_MODEL=deepseek-chat
+LLM_MODEL=deepseek-v4-flash
 ```
 
 ### OpenAI 可选配置
