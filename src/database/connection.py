@@ -54,6 +54,7 @@ def _upgrade_sqlite_document_columns():
         "stored_filename": "VARCHAR(255) NOT NULL DEFAULT ''",
         "mime_type": "VARCHAR(255) NOT NULL DEFAULT 'application/octet-stream'",
         "file_size": "INTEGER NOT NULL DEFAULT 0",
+        "document_type": "VARCHAR(20) NOT NULL DEFAULT 'OTHER'",
     }
 
     with engine.begin() as connection:

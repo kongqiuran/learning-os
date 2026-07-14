@@ -11,6 +11,7 @@ from src.services.course_service import (
     get_course_for_user,
     list_courses_for_user,
 )
+from src.services.analysis_service import analyze_course, get_learning_package
 from src.services.document_service import (
     DocumentUploadError,
     delete_document_for_user,
@@ -165,11 +166,22 @@ def render_course_detail(current_user):
         accept_multiple_files=True,
         key=f"course_upload_{course.id}",
     )
+    document_type = st.selectbox(
+        "Material type",
+        ["TEXTBOOK", "SLIDES", "EXAM", "HOMEWORK", "NOTES", "OTHER"],
+        index=5,
+        key=f"document_type_{course.id}",
+    )
     if st.button("Save uploaded files", type="primary", disabled=not uploaded_files):
         uploaded_count = 0
         for uploaded_file in uploaded_files:
             try:
-                save_uploaded_document(current_user.id, course.id, uploaded_file)
+                save_uploaded_document(
+                    current_user.id,
+                    course.id,
+                    uploaded_file,
+                    document_type=document_type,
+                )
             except DocumentUploadError as exc:
                 st.error(f"{uploaded_file.name}: {exc}")
             else:
@@ -177,6 +189,32 @@ def render_course_detail(current_user):
         if uploaded_count:
             st.success(f"Saved {uploaded_count} file(s).")
             st.rerun()
+
+    st.divider()
+    st.subheader("AI learning package")
+    action_column, view_column = st.columns(2)
+    if action_column.button(
+        "Generate AI learning package",
+        type="primary",
+        disabled=not documents,
+        use_container_width=True,
+    ):
+        with st.spinner("Analyzing course materials..."):
+            try:
+                analyze_course(course.id, current_user.id)
+            except Exception as exc:
+                st.error(f"Learning package generation failed: {exc}")
+            else:
+                st.success("Learning package generated.")
+                st.session_state.workspace_page = "learning_package"
+                st.rerun()
+    if view_column.button(
+        "View latest learning package",
+        disabled=get_learning_package(course.id, current_user.id) is None,
+        use_container_width=True,
+    ):
+        st.session_state.workspace_page = "learning_package"
+        st.rerun()
 
     st.subheader("Course materials")
     if not documents:
@@ -192,9 +230,49 @@ def render_course_detail(current_user):
                 f"Uploaded {document.uploaded_at.strftime('%Y-%m-%d %H:%M')}"
             )
             status_column.write(f"Status: `{document.processing_status}`")
+            status_column.caption(f"Type: {document.document_type}")
             if action_column.button("Delete", key=f"delete_document_{document.id}"):
                 delete_document_for_user(document.id, current_user.id, course.id)
                 st.rerun()
+
+
+def render_learning_package(current_user):
+    course_id = st.session_state.get("selected_course_id")
+    course = get_course_for_user(course_id, current_user.id)
+    if course is None:
+        st.session_state.workspace_page = "dashboard"
+        st.rerun()
+
+    if st.button("Back to course"):
+        st.session_state.workspace_page = "course_detail"
+        st.rerun()
+
+    st.title(f"{course.name} · Learning Package")
+    package = get_learning_package(course.id, current_user.id)
+    if package is None:
+        st.info("No learning package has been generated yet.")
+        return
+    st.caption(f"Version {package.version} · Status: {package.status}")
+    if package.status != "completed":
+        st.warning("The latest learning package is not available.")
+        return
+
+    content = package.content_json or {}
+    sections = [
+        ("Course Knowledge Map", "course_map"),
+        ("Chapter Summary", "chapter_summary"),
+        ("Key Points", "key_points"),
+        ("Formula Book", "formula_book"),
+        ("Exam Focus", "exam_focus"),
+        ("Practice Questions", "questions"),
+    ]
+    for title, key in sections:
+        st.subheader(title)
+        value = content.get(key, {} if key == "course_map" else [])
+        if value:
+            st.json(value, expanded=True)
+        else:
+            st.caption("No content generated for this section.")
 
 
 def format_file_size(file_size):
@@ -214,6 +292,8 @@ render_account_sidebar(current_user)
 workspace_page = st.session_state.get("workspace_page", "dashboard")
 if workspace_page == "course_detail":
     render_course_detail(current_user)
+elif workspace_page == "learning_package":
+    render_learning_package(current_user)
 else:
     render_dashboard(current_user)
 st.stop()

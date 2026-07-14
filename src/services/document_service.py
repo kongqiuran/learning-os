@@ -18,13 +18,14 @@ ALLOWED_FILE_TYPES = {
     },
     ".md": {"text/markdown", "text/plain", "text/x-markdown"},
 }
+DOCUMENT_TYPES = {"TEXTBOOK", "SLIDES", "EXAM", "HOMEWORK", "NOTES", "OTHER"}
 
 
 class DocumentUploadError(ValueError):
     pass
 
 
-def save_uploaded_document(user_id, course_id, uploaded_file):
+def save_uploaded_document(user_id, course_id, uploaded_file, document_type="OTHER"):
     if user_id is None or course_id is None:
         raise DocumentUploadError("A user and course are required.")
     if not _course_belongs_to_user(course_id, user_id):
@@ -34,6 +35,9 @@ def save_uploaded_document(user_id, course_id, uploaded_file):
     extension = Path(original_filename).suffix.lower()
     mime_type = (getattr(uploaded_file, "type", "") or "").lower().strip()
     _validate_file_type(extension, mime_type)
+    normalized_document_type = str(document_type).upper().strip()
+    if normalized_document_type not in DOCUMENT_TYPES:
+        raise DocumentUploadError("Invalid document type.")
 
     data = uploaded_file.getvalue() if hasattr(uploaded_file, "getvalue") else uploaded_file.read()
     file_size = len(data)
@@ -53,6 +57,7 @@ def save_uploaded_document(user_id, course_id, uploaded_file):
         mime_type=mime_type,
         file_size=file_size,
         processing_status="uploaded",
+        document_type=normalized_document_type,
     )
 
     try:

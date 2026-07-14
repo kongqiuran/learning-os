@@ -22,3 +22,7 @@ class Course(Base):
         back_populates="course",
         cascade="all, delete-orphan",
     )
+    learning_packages: Mapped[list["LearningPackage"]] = relationship(
+        back_populates="course",
+        cascade="all, delete-orphan",
+    )

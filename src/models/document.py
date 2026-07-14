@@ -14,6 +14,10 @@ class Document(Base):
             "status IN ('uploaded', 'processing', 'completed', 'failed')",
             name="ck_documents_status",
         ),
+        CheckConstraint(
+            "document_type IN ('TEXTBOOK', 'SLIDES', 'EXAM', 'HOMEWORK', 'NOTES', 'OTHER')",
+            name="ck_documents_document_type",
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -34,6 +38,7 @@ class Document(Base):
         default="uploaded",
         nullable=False,
     )
+    document_type: Mapped[str] = mapped_column(String(20), default="OTHER", nullable=False)
     uploaded_at: Mapped[datetime] = mapped_column(
         "created_at",
         DateTime(timezone=True),
@@ -47,3 +52,8 @@ class Document(Base):
 
     user: Mapped["User"] = relationship(back_populates="documents")
     course: Mapped["Course"] = relationship(back_populates="documents")
+    analysis: Mapped["DocumentAnalysis | None"] = relationship(
+        back_populates="document",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
