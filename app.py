@@ -5,6 +5,12 @@ from src.database import create_database_tables
 from src.exporter import build_output_filename, save_markdown
 from src.generator import generate_review_pack
 from src.loader import extract_text_from_files
+from src.services.course_service import (
+    create_course,
+    delete_course_for_user,
+    get_course_for_user,
+    list_courses_for_user,
+)
 from src.services.user_service import (
     UserAlreadyExistsError,
     authenticate_user,
@@ -65,10 +71,99 @@ def render_auth_page():
                     st.success("注册成功，请切换到登录页登录。")
 
 
+def render_account_sidebar(current_user):
+    with st.sidebar:
+        st.caption(f"Signed in as: {current_user.email}")
+        if st.button("Sign out", use_container_width=True):
+            clear_current_user()
+            st.session_state.pop("workspace_page", None)
+            st.session_state.pop("selected_course_id", None)
+            st.rerun()
+
+
+def render_dashboard(current_user):
+    st.title("🎓 My Learning Workspace")
+    st.write(f"Welcome, {current_user.email}")
+
+    with st.expander("＋ Create course", expanded=False):
+        with st.form("create_course_form", clear_on_submit=True):
+            course_name = st.text_input("Course name", placeholder="Signal and Systems")
+            course_description = st.text_area(
+                "Course description (optional)",
+                placeholder="Microelectronics major course",
+            )
+            create_submitted = st.form_submit_button("Create course", type="primary")
+
+        if create_submitted:
+            try:
+                create_course(current_user.id, course_name, course_description)
+            except ValueError:
+                st.error("Course name is required.")
+            else:
+                st.success("Course created.")
+                st.rerun()
+
+    st.subheader("My courses")
+    courses = list_courses_for_user(current_user.id)
+    if not courses:
+        st.info("No courses yet. Create your first learning workspace.")
+        return
+
+    for course in courses:
+        with st.container(border=True):
+            st.markdown(f"### 📘 {course.name}")
+            st.write(course.description or "No course description")
+            st.caption(f"Created: {course.created_at.strftime('%Y-%m-%d %H:%M')}")
+
+            enter_column, delete_column = st.columns([1, 1])
+            if enter_column.button("Open course", key=f"enter_course_{course.id}", type="primary"):
+                st.session_state.selected_course_id = course.id
+                st.session_state.workspace_page = "course_detail"
+                st.rerun()
+            if delete_column.button("Delete course", key=f"delete_course_{course.id}"):
+                delete_course_for_user(course.id, current_user.id)
+                st.rerun()
+
+
+def render_course_detail(current_user):
+    course_id = st.session_state.get("selected_course_id")
+    course = get_course_for_user(course_id, current_user.id)
+    if course is None:
+        st.session_state.workspace_page = "dashboard"
+        st.session_state.pop("selected_course_id", None)
+        st.warning("The course does not exist or you do not have access.")
+        if st.button("Back to my courses"):
+            st.rerun()
+        return
+
+    if st.button("← Back to my courses"):
+        st.session_state.workspace_page = "dashboard"
+        st.session_state.pop("selected_course_id", None)
+        st.rerun()
+
+    st.title(f"📘 {course.name}")
+    st.write(course.description or "No course description")
+    st.caption(f"Created: {course.created_at.strftime('%Y-%m-%d %H:%M')}")
+
+    st.divider()
+    st.subheader("Course status")
+    st.metric("Documents", 0)
+    st.write("Knowledge structure: not generated")
+    st.info("Document uploads and knowledge views will be added in a later step.")
+
+
 current_user = get_current_user()
 if current_user is None:
     render_auth_page()
     st.stop()
+
+render_account_sidebar(current_user)
+workspace_page = st.session_state.get("workspace_page", "dashboard")
+if workspace_page == "course_detail":
+    render_course_detail(current_user)
+else:
+    render_dashboard(current_user)
+st.stop()
 
 st.title("🎓 ExamPilot")
 st.subheader("48小时生成你的期末冲刺包")
