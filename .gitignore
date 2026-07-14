@@ -8,9 +8,15 @@ venv/
 data/raw/*
 data/processed/*
 data/outputs/*
+data/database/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 !data/outputs/.gitkeep
+!data/database/.gitkeep
+
+*.db
+*.sqlite
+*.sqlite3
 
 *.pdf
 *.ppt

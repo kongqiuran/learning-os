@@ -9,6 +9,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
 OUTPUT_DIR = DATA_DIR / "outputs"
 ENV_FILE = BASE_DIR / ".env"
+DEFAULT_DATABASE_PATH = DATA_DIR / "database" / "learning_os.db"
 
 
 @dataclass(frozen=True)
@@ -35,3 +36,20 @@ def get_max_chars_per_request():
         return int(os.getenv("MAX_CHARS_PER_REQUEST", "60000"))
     except ValueError:
         return 60000
+
+
+def get_database_url():
+    load_dotenv(ENV_FILE, override=True)
+    configured_url = os.getenv("DATABASE_URL", "").strip()
+    if not configured_url:
+        return f"sqlite:///{DEFAULT_DATABASE_PATH.as_posix()}"
+
+    sqlite_prefix = "sqlite:///"
+    if not configured_url.startswith(sqlite_prefix):
+        return configured_url
+
+    database_path = configured_url.removeprefix(sqlite_prefix)
+    if database_path == ":memory:" or Path(database_path).is_absolute():
+        return configured_url
+
+    return f"sqlite:///{(BASE_DIR / database_path).resolve().as_posix()}"
