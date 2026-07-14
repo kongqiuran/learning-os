@@ -6,7 +6,7 @@ from src.ai.generators.learning_package_generator import generate_learning_packa
 from src.config import get_max_chars_per_request
 from src.database import get_db_session
 from src.models import Course, Document, DocumentAnalysis, LearningPackage
-from src.services.pdf_service import extract_text
+from src.services.file_parser_service import extract_text, get_source_type
 
 
 def analyze_course(course_id, user_id, llm_client=None):
@@ -14,7 +14,8 @@ def analyze_course(course_id, user_id, llm_client=None):
     if course is None:
         raise ValueError("The course does not exist or access is denied.")
     if not documents:
-        raise ValueError("Upload at least one PDF before generating a learning package.")
+        raise ValueError("Upload at least one supported document before generating a learning package.")
+    _validate_document_course_binding(course_id, documents)
 
     package = _create_processing_package(course.id)
     try:
@@ -48,6 +49,11 @@ def get_learning_package(course_id, user_id):
         )
 
 
+def _validate_document_course_binding(course_id, documents):
+    if any(document.course_id != int(course_id) for document in documents):
+        raise ValueError("Document-course mismatch detected.")
+
+
 def _load_course_documents(course_id, user_id):
     if course_id is None or user_id is None:
         return None, []
@@ -61,7 +67,6 @@ def _load_course_documents(course_id, user_id):
                 .where(
                     Document.course_id == int(course_id),
                     Document.user_id == int(user_id),
-                    Document.mime_type == "application/pdf",
                 )
                 .order_by(Document.id)
             )
@@ -91,12 +96,14 @@ def _get_or_create_document_analysis(document, llm_client):
             select(DocumentAnalysis).where(DocumentAnalysis.document_id == document.id)
         )
         if existing is not None:
-            return _serialize_analysis(document.document_type, existing)
+            return _serialize_analysis(document, existing)
 
     try:
-        text = extract_text(document.file_path)
+        text = extract_text(document.file_path, document.mime_type)
+        source_type = get_source_type(document.file_path, document.mime_type)
         result = analyze_document(
             document.document_type,
+            source_type,
             text[: get_max_chars_per_request()],
             llm_client=llm_client,
         )
@@ -112,7 +119,7 @@ def _get_or_create_document_analysis(document, llm_client):
             stored_document = session.get(Document, document.id)
             stored_document.processing_status = "completed"
             session.flush()
-        return _serialize_analysis(document.document_type, analysis)
+        return _serialize_analysis(document, analysis)
     except Exception:
         with get_db_session() as session:
             stored_document = session.get(Document, document.id)
@@ -121,10 +128,16 @@ def _get_or_create_document_analysis(document, llm_client):
         raise
 
 
-def _serialize_analysis(document_type, analysis):
+def _serialize_analysis(document, analysis):
+    source_type = get_source_type(document.file_path, document.mime_type)
     return {
-        "document_type": document_type,
+        "document_type": document.document_type,
+        "source_type": source_type,
         "summary": analysis.summary,
         "topics": analysis.topics,
         "importance_map": analysis.importance_map,
+        "document_metadata": {
+            "document_type": document.document_type,
+            "source_type": source_type,
+        },
     }

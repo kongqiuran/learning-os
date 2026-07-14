@@ -13,9 +13,7 @@ ALLOWED_FILE_TYPES = {
     ".pptx": {
         "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     },
-    ".docx": {
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    },
+    ".txt": {"text/plain"},
     ".md": {"text/markdown", "text/plain", "text/x-markdown"},
 }
 DOCUMENT_TYPES = {"TEXTBOOK", "SLIDES", "EXAM", "HOMEWORK", "NOTES", "OTHER"}
@@ -125,7 +123,7 @@ def _course_belongs_to_user(course_id, user_id):
 
 def _validate_file_type(extension, mime_type):
     if extension not in ALLOWED_FILE_TYPES:
-        raise DocumentUploadError("Supported file types are PDF, PPTX, DOCX, and Markdown.")
+        raise DocumentUploadError("Supported file types are PDF, PPTX, TXT, and MD.")
     if mime_type not in ALLOWED_FILE_TYPES[extension]:
         raise DocumentUploadError("The file MIME type does not match the selected format.")
 
@@ -133,5 +131,5 @@ def _validate_file_type(extension, mime_type):
 def _validate_file_signature(extension, data):
     if extension == ".pdf" and not data.startswith(b"%PDF-"):
         raise DocumentUploadError("The file does not contain a valid PDF signature.")
-    if extension in {".pptx", ".docx"} and not data.startswith(b"PK"):
+    if extension == ".pptx" and not data.startswith(b"PK"):
         raise DocumentUploadError("The Office file does not contain a valid ZIP signature.")

@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 
 import fitz
+from pptx import Presentation
 
 
 TEST_DIR = tempfile.TemporaryDirectory()
@@ -12,18 +13,23 @@ os.environ["DATABASE_URL"] = f"sqlite:///{(Path(TEST_DIR.name) / 'test.db').as_p
 from src.database import create_database_tables, get_db_session  # noqa: E402
 from src.database.connection import engine  # noqa: E402
 from src.models import Course, Document, DocumentAnalysis, LearningPackage, User  # noqa: E402
-from src.services.analysis_service import analyze_course, get_learning_package  # noqa: E402
+from src.services.analysis_service import (  # noqa: E402
+    _validate_document_course_binding,
+    analyze_course,
+    get_learning_package,
+)
+from src.services.file_parser_service import extract_text  # noqa: E402
 
 
 class FakeLLMClient:
     def generate(self, system_prompt, user_prompt):
-        if "document_type" in user_prompt:
+        if "课程资料分析器" in system_prompt:
             return {
                 "summary": "Test summary",
                 "topics": ["Core topic"],
                 "importance_map": {"Core topic": "high"},
             }
-        if "knowledge_map" in system_prompt:
+        if "课程级知识分析器" in system_prompt:
             return {
                 "knowledge_map": {"Core topic": []},
                 "chapter_relations": [],
@@ -34,7 +40,14 @@ class FakeLLMClient:
             "chapter_summary": ["Chapter summary"],
             "key_points": ["Core topic"],
             "formula_book": [],
-            "exam_focus": ["Core topic"],
+            "exam_focus": [
+                {
+                    "topic": "Core topic",
+                    "importance": 5,
+                    "reason": "Central course concept",
+                    "evidence": ["来源于课程资料分析"],
+                }
+            ],
             "questions": [{"question": "Test?", "answer": "Yes"}],
         }
 
@@ -48,6 +61,11 @@ class AnalysisFlowTest(unittest.TestCase):
     def tearDownClass(cls):
         engine.dispose()
         TEST_DIR.cleanup()
+
+    def setUp(self):
+        with get_db_session() as session:
+            for model in (LearningPackage, DocumentAnalysis, Document, Course, User):
+                session.query(model).delete()
 
     def test_course_analysis_persists_results(self):
         pdf_path = Path(TEST_DIR.name) / "course.pdf"
@@ -86,6 +104,115 @@ class AnalysisFlowTest(unittest.TestCase):
         with get_db_session() as session:
             self.assertEqual(session.query(DocumentAnalysis).count(), 1)
             self.assertEqual(session.query(LearningPackage).count(), 1)
+
+    def test_two_courses_are_analyzed_in_isolation(self):
+        signal_pdf = Path(TEST_DIR.name) / "CH1.pdf"
+        verilog_pdf = Path(TEST_DIR.name) / "verilog.pdf"
+        self._make_pdf(signal_pdf, "Signal and Systems convolution")
+        self._make_pdf(verilog_pdf, "Verilog finite state machine")
+
+        with get_db_session() as session:
+            user = User(email="isolation@example.com", password_hash="test")
+            session.add(user)
+            session.flush()
+            signal_course = Course(user_id=user.id, name="信号与系统")
+            verilog_course = Course(user_id=user.id, name="Verilog")
+            session.add_all([signal_course, verilog_course])
+            session.flush()
+            session.add_all(
+                [
+                    self._document(user.id, signal_course.id, signal_pdf),
+                    self._document(user.id, verilog_course.id, verilog_pdf),
+                ]
+            )
+            session.flush()
+            user_id = user.id
+            signal_course_id = signal_course.id
+            verilog_course_id = verilog_course.id
+
+        analyze_course(signal_course_id, user_id, llm_client=FakeLLMClient())
+        with get_db_session() as session:
+            analyzed_document_ids = {
+                item.document_id for item in session.query(DocumentAnalysis).all()
+            }
+            signal_document_id = session.query(Document.id).filter_by(course_id=signal_course_id).scalar()
+            verilog_document_id = session.query(Document.id).filter_by(course_id=verilog_course_id).scalar()
+        self.assertIn(signal_document_id, analyzed_document_ids)
+        self.assertNotIn(verilog_document_id, analyzed_document_ids)
+
+    def test_pdf_and_pptx_enter_analysis_flow(self):
+        pdf_path = Path(TEST_DIR.name) / "formats.pdf"
+        pptx_path = Path(TEST_DIR.name) / "formats.pptx"
+        self._make_pdf(pdf_path, "PDF course material")
+        presentation = Presentation()
+        slide = presentation.slides.add_slide(presentation.slide_layouts[5])
+        slide.shapes.title.text = "PPTX course material"
+        presentation.save(pptx_path)
+
+        with get_db_session() as session:
+            user = User(email="formats@example.com", password_hash="test")
+            session.add(user)
+            session.flush()
+            course = Course(user_id=user.id, name="Mixed formats")
+            session.add(course)
+            session.flush()
+            session.add(self._document(user.id, course.id, pdf_path, "application/pdf"))
+            session.add(
+                self._document(
+                    user.id,
+                    course.id,
+                    pptx_path,
+                    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                )
+            )
+            session.flush()
+            user_id, course_id = user.id, course.id
+
+        package = analyze_course(course_id, user_id, llm_client=FakeLLMClient())
+        self.assertEqual(package.status, "completed")
+        with get_db_session() as session:
+            self.assertEqual(
+                session.query(DocumentAnalysis)
+                .join(Document)
+                .filter(Document.course_id == course_id)
+                .count(),
+                2,
+            )
+        self.assertIn("PPTX course material", extract_text(pptx_path, "application/vnd.openxmlformats-officedocument.presentationml.presentation"))
+
+    def test_document_course_mismatch_is_rejected(self):
+        mismatched = type("DocumentStub", (), {"course_id": 2})()
+        with self.assertRaisesRegex(ValueError, "Document-course mismatch detected\\."):
+            _validate_document_course_binding(1, [mismatched])
+
+    def test_txt_and_markdown_are_parsed_as_plain_text(self):
+        txt_path = Path(TEST_DIR.name) / "notes.txt"
+        md_path = Path(TEST_DIR.name) / "notes.md"
+        txt_path.write_text("Plain course notes", encoding="utf-8")
+        md_path.write_text("# Markdown course notes", encoding="utf-8")
+
+        self.assertEqual(extract_text(txt_path, "text/plain"), "Plain course notes")
+        self.assertEqual(extract_text(md_path, "text/markdown"), "# Markdown course notes")
+
+    @staticmethod
+    def _make_pdf(path, text):
+        with fitz.open() as pdf:
+            page = pdf.new_page()
+            page.insert_text((72, 72), text)
+            pdf.save(path)
+
+    @staticmethod
+    def _document(user_id, course_id, path, mime_type="application/pdf"):
+        return Document(
+            user_id=user_id,
+            course_id=course_id,
+            original_filename=path.name,
+            stored_filename=path.name,
+            file_path=str(path),
+            mime_type=mime_type,
+            file_size=path.stat().st_size,
+            document_type="TEXTBOOK",
+        )
 
 
 if __name__ == "__main__":

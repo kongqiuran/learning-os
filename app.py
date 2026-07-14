@@ -84,7 +84,7 @@ def render_account_sidebar(current_user):
         if st.button("Sign out", use_container_width=True):
             clear_current_user()
             st.session_state.pop("workspace_page", None)
-            st.session_state.pop("selected_course_id", None)
+            st.session_state.pop("current_course_id", None)
             st.rerun()
 
 
@@ -124,7 +124,7 @@ def render_dashboard(current_user):
 
             enter_column, delete_column = st.columns([1, 1])
             if enter_column.button("Open course", key=f"enter_course_{course.id}", type="primary"):
-                st.session_state.selected_course_id = course.id
+                st.session_state.current_course_id = course.id
                 st.session_state.workspace_page = "course_detail"
                 st.rerun()
             if delete_column.button("Delete course", key=f"delete_course_{course.id}"):
@@ -133,11 +133,11 @@ def render_dashboard(current_user):
 
 
 def render_course_detail(current_user):
-    course_id = st.session_state.get("selected_course_id")
+    course_id = st.session_state.get("current_course_id")
     course = get_course_for_user(course_id, current_user.id)
     if course is None:
         st.session_state.workspace_page = "dashboard"
-        st.session_state.pop("selected_course_id", None)
+        st.session_state.pop("current_course_id", None)
         st.warning("The course does not exist or you do not have access.")
         if st.button("Back to my courses"):
             st.rerun()
@@ -145,7 +145,7 @@ def render_course_detail(current_user):
 
     if st.button("← Back to my courses"):
         st.session_state.workspace_page = "dashboard"
-        st.session_state.pop("selected_course_id", None)
+        st.session_state.pop("current_course_id", None)
         st.rerun()
 
     st.title(f"📘 {course.name}")
@@ -161,8 +161,8 @@ def render_course_detail(current_user):
     st.divider()
     st.subheader("Upload course materials")
     uploaded_files = st.file_uploader(
-        "Choose PDF, PPTX, DOCX, or Markdown files",
-        type=["pdf", "pptx", "docx", "md"],
+        "Choose PDF, PPTX, TXT, or Markdown files",
+        type=["pdf", "pptx", "txt", "md"],
         accept_multiple_files=True,
         key=f"course_upload_{course.id}",
     )
@@ -237,7 +237,7 @@ def render_course_detail(current_user):
 
 
 def render_learning_package(current_user):
-    course_id = st.session_state.get("selected_course_id")
+    course_id = st.session_state.get("current_course_id")
     course = get_course_for_user(course_id, current_user.id)
     if course is None:
         st.session_state.workspace_page = "dashboard"

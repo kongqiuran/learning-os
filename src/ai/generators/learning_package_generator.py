@@ -22,4 +22,19 @@ def generate_learning_package(course_analysis, llm_client=None):
     )
     defaults = {"course_map": {}}
     defaults.update({key: [] for key in PACKAGE_KEYS if key != "course_map"})
-    return {key: result.get(key, defaults[key]) for key in PACKAGE_KEYS}
+    package = {key: result.get(key, defaults[key]) for key in PACKAGE_KEYS}
+    package["exam_focus"] = [_normalize_exam_focus(item) for item in package["exam_focus"]]
+    return package
+
+
+def _normalize_exam_focus(item):
+    if isinstance(item, str):
+        item = {"topic": item}
+    normalized = dict(item)
+    normalized.setdefault("topic", "")
+    normalized.setdefault("importance", 3)
+    normalized.setdefault("reason", "来源于课程资料分析")
+    evidence = normalized.get("evidence")
+    if not isinstance(evidence, list) or not evidence:
+        normalized["evidence"] = ["来源于课程资料分析"]
+    return normalized
