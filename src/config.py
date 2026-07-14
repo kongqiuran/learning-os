@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
 OUTPUT_DIR = DATA_DIR / "outputs"
+UPLOAD_DIR = DATA_DIR / "uploads"
 ENV_FILE = BASE_DIR / ".env"
 DEFAULT_DATABASE_PATH = DATA_DIR / "database" / "learning_os.db"
 
@@ -53,3 +54,12 @@ def get_database_url():
         return configured_url
 
     return f"sqlite:///{(BASE_DIR / database_path).resolve().as_posix()}"
+
+
+def get_max_upload_size():
+    load_dotenv(ENV_FILE, override=True)
+    try:
+        size_mb = int(os.getenv("MAX_UPLOAD_SIZE_MB", "50"))
+    except ValueError:
+        size_mb = 50
+    return max(1, size_mb) * 1024 * 1024

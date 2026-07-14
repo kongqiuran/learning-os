@@ -9,10 +9,12 @@ data/raw/*
 data/processed/*
 data/outputs/*
 data/database/*
+data/uploads/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 !data/outputs/.gitkeep
 !data/database/.gitkeep
+!data/uploads/.gitkeep
 
 *.db
 *.sqlite

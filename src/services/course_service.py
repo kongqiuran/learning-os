@@ -1,7 +1,8 @@
 from sqlalchemy import delete, select
 
 from src.database import get_db_session
-from src.models import Course
+from src.models import Course, Document
+from src.storage import delete_document_file
 
 
 def create_course(user_id, name, description=None):
@@ -56,9 +57,22 @@ def delete_course_for_user(course_id, user_id):
         return False
 
     with get_db_session() as session:
+        file_paths = list(
+            session.scalars(
+                select(Document.file_path).where(
+                    Document.course_id == int(course_id),
+                    Document.user_id == int(user_id),
+                )
+            )
+        )
         statement = delete(Course).where(
             Course.id == int(course_id),
             Course.user_id == int(user_id),
         )
         result = session.execute(statement)
-        return result.rowcount > 0
+
+    if result.rowcount > 0:
+        for file_path in file_paths:
+            delete_document_file(file_path)
+        return True
+    return False

@@ -1,7 +1,7 @@
 from contextlib import contextmanager
 from pathlib import Path
 
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -42,6 +42,26 @@ def create_database_tables():
     import src.models  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
+    _upgrade_sqlite_document_columns()
+
+
+def _upgrade_sqlite_document_columns():
+    if not DATABASE_URL.startswith("sqlite"):
+        return
+
+    existing_columns = {column["name"] for column in inspect(engine).get_columns("documents")}
+    required_columns = {
+        "stored_filename": "VARCHAR(255) NOT NULL DEFAULT ''",
+        "mime_type": "VARCHAR(255) NOT NULL DEFAULT 'application/octet-stream'",
+        "file_size": "INTEGER NOT NULL DEFAULT 0",
+    }
+
+    with engine.begin() as connection:
+        for column_name, column_definition in required_columns.items():
+            if column_name not in existing_columns:
+                connection.execute(
+                    text(f"ALTER TABLE documents ADD COLUMN {column_name} {column_definition}")
+                )
 
 
 @contextmanager

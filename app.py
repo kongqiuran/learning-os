@@ -11,6 +11,12 @@ from src.services.course_service import (
     get_course_for_user,
     list_courses_for_user,
 )
+from src.services.document_service import (
+    DocumentUploadError,
+    delete_document_for_user,
+    list_documents_for_course,
+    save_uploaded_document,
+)
 from src.services.user_service import (
     UserAlreadyExistsError,
     authenticate_user,
@@ -147,9 +153,56 @@ def render_course_detail(current_user):
 
     st.divider()
     st.subheader("Course status")
-    st.metric("Documents", 0)
+    documents = list_documents_for_course(current_user.id, course.id)
+    st.metric("Documents", len(documents))
     st.write("Knowledge structure: not generated")
-    st.info("Document uploads and knowledge views will be added in a later step.")
+
+    st.divider()
+    st.subheader("Upload course materials")
+    uploaded_files = st.file_uploader(
+        "Choose PDF, PPTX, DOCX, or Markdown files",
+        type=["pdf", "pptx", "docx", "md"],
+        accept_multiple_files=True,
+        key=f"course_upload_{course.id}",
+    )
+    if st.button("Save uploaded files", type="primary", disabled=not uploaded_files):
+        uploaded_count = 0
+        for uploaded_file in uploaded_files:
+            try:
+                save_uploaded_document(current_user.id, course.id, uploaded_file)
+            except DocumentUploadError as exc:
+                st.error(f"{uploaded_file.name}: {exc}")
+            else:
+                uploaded_count += 1
+        if uploaded_count:
+            st.success(f"Saved {uploaded_count} file(s).")
+            st.rerun()
+
+    st.subheader("Course materials")
+    if not documents:
+        st.info("No course materials uploaded yet.")
+        return
+
+    for document in documents:
+        with st.container(border=True):
+            name_column, status_column, action_column = st.columns([4, 2, 1])
+            name_column.markdown(f"📄 **{document.original_filename}**")
+            name_column.caption(
+                f"{format_file_size(document.file_size)} · "
+                f"Uploaded {document.uploaded_at.strftime('%Y-%m-%d %H:%M')}"
+            )
+            status_column.write(f"Status: `{document.processing_status}`")
+            if action_column.button("Delete", key=f"delete_document_{document.id}"):
+                delete_document_for_user(document.id, current_user.id, course.id)
+                st.rerun()
+
+
+def format_file_size(file_size):
+    if file_size < 1024:
+        return f"{file_size} B"
+    if file_size < 1024 * 1024:
+        return f"{file_size / 1024:.1f} KB"
+    return f"{file_size / (1024 * 1024):.1f} MB"
 
 
 current_user = get_current_user()
