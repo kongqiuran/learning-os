@@ -1,15 +1,74 @@
 import streamlit as st
 
+from src.auth.session import clear_current_user, get_current_user, set_current_user
+from src.database import create_database_tables
 from src.exporter import build_output_filename, save_markdown
 from src.generator import generate_review_pack
 from src.loader import extract_text_from_files
+from src.services.user_service import (
+    UserAlreadyExistsError,
+    authenticate_user,
+    register_user,
+)
 
 
 st.set_page_config(
-    page_title="ExamPilot",
+    page_title="Learning OS",
     page_icon="🎓",
     layout="wide",
 )
+
+create_database_tables()
+
+
+def render_auth_page():
+    st.title("🎓 Learning OS")
+    st.subheader("把课程资料整理成结构化知识体系")
+
+    login_tab, register_tab = st.tabs(["登录", "注册"])
+
+    with login_tab:
+        with st.form("login_form"):
+            login_email = st.text_input("邮箱", key="login_email")
+            login_password = st.text_input("密码", type="password", key="login_password")
+            login_submitted = st.form_submit_button("登录", type="primary")
+
+        if login_submitted:
+            user = authenticate_user(login_email, login_password)
+            if user is None:
+                st.error("邮箱或密码错误。")
+            else:
+                set_current_user(user.id)
+                st.rerun()
+
+    with register_tab:
+        with st.form("register_form"):
+            register_email = st.text_input("邮箱", key="register_email")
+            register_password = st.text_input("密码", type="password", key="register_password")
+            confirm_password = st.text_input("确认密码", type="password")
+            register_submitted = st.form_submit_button("创建账号", type="primary")
+
+        if register_submitted:
+            if register_password != confirm_password:
+                st.error("两次输入的密码不一致。")
+            else:
+                try:
+                    register_user(register_email, register_password)
+                except UserAlreadyExistsError:
+                    st.error("该邮箱已经注册。")
+                except ValueError as exc:
+                    if "Email" in str(exc):
+                        st.error("邮箱不能为空。")
+                    else:
+                        st.error("密码不能为空。")
+                else:
+                    st.success("注册成功，请切换到登录页登录。")
+
+
+current_user = get_current_user()
+if current_user is None:
+    render_auth_page()
+    st.stop()
 
 st.title("🎓 ExamPilot")
 st.subheader("48小时生成你的期末冲刺包")
@@ -19,6 +78,11 @@ st.write(
 )
 
 with st.sidebar:
+    st.caption(f"当前用户：{current_user.email}")
+    if st.button("退出登录", use_container_width=True):
+        clear_current_user()
+        st.rerun()
+    st.divider()
     st.header("生成设置")
     course_name = st.text_input("课程名称", value="半导体物理")
     output_name = st.text_input("输出文件名", value="")
