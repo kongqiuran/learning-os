@@ -14,7 +14,7 @@ DOCUMENT_TYPE_WEIGHTS = {
 }
 
 
-def analyze_course_documents(document_analyses, llm_client=None):
+def analyze_course_documents(document_analyses, llm_client=None, language="zh"):
     if not document_analyses:
         raise ValueError("No document analyses are available.")
     weighted = []
@@ -25,5 +25,5 @@ def analyze_course_documents(document_analyses, llm_client=None):
     client = llm_client or LLMClient()
     return client.generate(
         get_prompt("course_analyzer"),
-        json.dumps({"documents": weighted}, ensure_ascii=False),
+        json.dumps({"documents": weighted, "language": language}, ensure_ascii=False),
     )

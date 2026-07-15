@@ -9,7 +9,7 @@ from src.models import Course, Document, DocumentAnalysis, LearningPackage
 from src.services.file_parser_service import extract_text, get_source_type
 
 
-def analyze_course(course_id, user_id, llm_client=None):
+def analyze_course(course_id, user_id, llm_client=None, language="zh"):
     course, documents = _load_course_documents(course_id, user_id)
     if course is None:
         raise ValueError("The course does not exist or access is denied.")
@@ -19,9 +19,20 @@ def analyze_course(course_id, user_id, llm_client=None):
 
     package = _create_processing_package(course.id)
     try:
-        analyses = [_get_or_create_document_analysis(document, llm_client) for document in documents]
-        course_analysis = analyze_course_documents(analyses, llm_client=llm_client)
-        content = generate_learning_package(course_analysis, llm_client=llm_client)
+        analyses = [
+            _get_or_create_document_analysis(document, llm_client, language)
+            for document in documents
+        ]
+        course_analysis = analyze_course_documents(
+            analyses,
+            llm_client=llm_client,
+            language=language,
+        )
+        content = generate_learning_package(
+            course_analysis,
+            llm_client=llm_client,
+            language=language,
+        )
         with get_db_session() as session:
             stored_package = session.get(LearningPackage, package.id)
             stored_package.status = "completed"
@@ -90,7 +101,7 @@ def _create_processing_package(course_id):
     return package
 
 
-def _get_or_create_document_analysis(document, llm_client):
+def _get_or_create_document_analysis(document, llm_client, language="zh"):
     with get_db_session() as session:
         existing = session.scalar(
             select(DocumentAnalysis).where(DocumentAnalysis.document_id == document.id)
@@ -106,6 +117,7 @@ def _get_or_create_document_analysis(document, llm_client):
             source_type,
             text[: get_max_chars_per_request()],
             llm_client=llm_client,
+            language=language,
         )
         analysis = DocumentAnalysis(
             document_id=document.id,

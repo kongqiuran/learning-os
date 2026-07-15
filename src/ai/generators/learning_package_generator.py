@@ -15,11 +15,14 @@ PACKAGE_KEYS = (
 )
 
 
-def generate_learning_package(course_analysis, llm_client=None):
+def generate_learning_package(course_analysis, llm_client=None, language="zh"):
     client = llm_client or LLMClient()
     result = client.generate(
         get_prompt("learning_package_generator"),
-        json.dumps(course_analysis, ensure_ascii=False),
+        json.dumps(
+            {"course_analysis": course_analysis, "language": language},
+            ensure_ascii=False,
+        ),
     )
     defaults = {"course_map": {}, "exam_strategy": {}}
     defaults.update({key: [] for key in PACKAGE_KEYS if key not in defaults})

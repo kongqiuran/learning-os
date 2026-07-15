@@ -4,6 +4,7 @@ from src.auth.session import clear_current_user, get_current_user, set_current_u
 from src.database import create_database_tables
 from src.exporter import build_output_filename, save_markdown
 from src.generator import generate_review_pack
+from src.i18n import t
 from src.loader import extract_text_from_files
 from src.services.course_service import (
     create_course,
@@ -26,7 +27,7 @@ from src.services.user_service import (
 
 
 st.set_page_config(
-    page_title="Learning OS",
+    page_title=t("app_title", "zh"),
     page_icon="🎓",
     layout="wide",
 )
@@ -34,54 +35,80 @@ st.set_page_config(
 create_database_tables()
 
 
-def render_auth_page():
-    st.title("🎓 Learning OS")
-    st.subheader("把课程资料整理成结构化知识体系")
+def get_language():
+    if "language" not in st.session_state:
+        st.session_state.language = "zh"
+    return st.session_state.language
 
-    login_tab, register_tab = st.tabs(["登录", "注册"])
+
+def tr(key, **values):
+    text = t(key, get_language())
+    return text.format(**values) if values else text
+
+
+def render_language_selector():
+    _, language_column = st.columns([8, 2])
+    with language_column:
+        st.selectbox(
+            tr("language"),
+            options=["zh", "en"],
+            format_func=lambda value: t("chinese" if value == "zh" else "english", value),
+            key="language",
+            label_visibility="collapsed",
+        )
+
+
+render_language_selector()
+
+
+def render_auth_page():
+    st.title(tr("app_title"))
+    st.subheader(tr("app_tagline"))
+
+    login_tab, register_tab = st.tabs([tr("login"), tr("register")])
 
     with login_tab:
         with st.form("login_form"):
-            login_email = st.text_input("邮箱", key="login_email")
-            login_password = st.text_input("密码", type="password", key="login_password")
-            login_submitted = st.form_submit_button("登录", type="primary")
+            login_email = st.text_input(tr("email"), key="login_email")
+            login_password = st.text_input(tr("password"), type="password", key="login_password")
+            login_submitted = st.form_submit_button(tr("login"), type="primary")
 
         if login_submitted:
             user = authenticate_user(login_email, login_password)
             if user is None:
-                st.error("邮箱或密码错误。")
+                st.error(tr("invalid_credentials"))
             else:
                 set_current_user(user.id)
                 st.rerun()
 
     with register_tab:
         with st.form("register_form"):
-            register_email = st.text_input("邮箱", key="register_email")
-            register_password = st.text_input("密码", type="password", key="register_password")
-            confirm_password = st.text_input("确认密码", type="password")
-            register_submitted = st.form_submit_button("创建账号", type="primary")
+            register_email = st.text_input(tr("email"), key="register_email")
+            register_password = st.text_input(tr("password"), type="password", key="register_password")
+            confirm_password = st.text_input(tr("confirm_password"), type="password")
+            register_submitted = st.form_submit_button(tr("create_account"), type="primary")
 
         if register_submitted:
             if register_password != confirm_password:
-                st.error("两次输入的密码不一致。")
+                st.error(tr("password_mismatch"))
             else:
                 try:
                     register_user(register_email, register_password)
                 except UserAlreadyExistsError:
-                    st.error("该邮箱已经注册。")
+                    st.error(tr("user_exists"))
                 except ValueError as exc:
                     if "Email" in str(exc):
-                        st.error("邮箱不能为空。")
+                        st.error(tr("email_required"))
                     else:
-                        st.error("密码不能为空。")
+                        st.error(tr("password_required"))
                 else:
-                    st.success("注册成功，请切换到登录页登录。")
+                    st.success(tr("register_success"))
 
 
 def render_account_sidebar(current_user):
     with st.sidebar:
-        st.caption(f"Signed in as: {current_user.email}")
-        if st.button("Sign out", use_container_width=True):
+        st.caption(tr("signed_in_as", email=current_user.email))
+        if st.button(tr("sign_out"), use_container_width=True):
             clear_current_user()
             st.session_state.pop("workspace_page", None)
             st.session_state.pop("current_course_id", None)
@@ -89,45 +116,45 @@ def render_account_sidebar(current_user):
 
 
 def render_dashboard(current_user):
-    st.title("🎓 My Learning Workspace")
-    st.write(f"Welcome, {current_user.email}")
+    st.title(tr("workspace_title"))
+    st.write(tr("welcome", email=current_user.email))
 
-    with st.expander("＋ Create course", expanded=False):
+    with st.expander(tr("create_course"), expanded=False):
         with st.form("create_course_form", clear_on_submit=True):
-            course_name = st.text_input("Course name", placeholder="Signal and Systems")
+            course_name = st.text_input(tr("course_name"), placeholder=tr("course_name_placeholder"))
             course_description = st.text_area(
-                "Course description (optional)",
-                placeholder="Microelectronics major course",
+                tr("course_description"),
+                placeholder=tr("course_description_placeholder"),
             )
-            create_submitted = st.form_submit_button("Create course", type="primary")
+            create_submitted = st.form_submit_button(tr("create_course"), type="primary")
 
         if create_submitted:
             try:
                 create_course(current_user.id, course_name, course_description)
             except ValueError:
-                st.error("Course name is required.")
+                st.error(tr("course_name_required"))
             else:
-                st.success("Course created.")
+                st.success(tr("course_created"))
                 st.rerun()
 
-    st.subheader("My courses")
+    st.subheader(tr("my_courses"))
     courses = list_courses_for_user(current_user.id)
     if not courses:
-        st.info("No courses yet. Create your first learning workspace.")
+        st.info(tr("no_courses"))
         return
 
     for course in courses:
         with st.container(border=True):
             st.markdown(f"### 📘 {course.name}")
-            st.write(course.description or "No course description")
-            st.caption(f"Created: {course.created_at.strftime('%Y-%m-%d %H:%M')}")
+            st.write(course.description or tr("no_description"))
+            st.caption(tr("created_at", time=course.created_at.strftime('%Y-%m-%d %H:%M')))
 
             enter_column, delete_column = st.columns([1, 1])
-            if enter_column.button("Open course", key=f"enter_course_{course.id}", type="primary"):
+            if enter_column.button(tr("open_course"), key=f"enter_course_{course.id}", type="primary"):
                 st.session_state.current_course_id = course.id
                 st.session_state.workspace_page = "course_detail"
                 st.rerun()
-            if delete_column.button("Delete course", key=f"delete_course_{course.id}"):
+            if delete_column.button(tr("delete_course"), key=f"delete_course_{course.id}"):
                 delete_course_for_user(course.id, current_user.id)
                 st.rerun()
 
@@ -138,41 +165,42 @@ def render_course_detail(current_user):
     if course is None:
         st.session_state.workspace_page = "dashboard"
         st.session_state.pop("current_course_id", None)
-        st.warning("The course does not exist or you do not have access.")
-        if st.button("Back to my courses"):
+        st.warning(tr("course_not_found"))
+        if st.button(tr("back_to_courses")):
             st.rerun()
         return
 
-    if st.button("← Back to my courses"):
+    if st.button(tr("back_to_courses")):
         st.session_state.workspace_page = "dashboard"
         st.session_state.pop("current_course_id", None)
         st.rerun()
 
     st.title(f"📘 {course.name}")
-    st.write(course.description or "No course description")
-    st.caption(f"Created: {course.created_at.strftime('%Y-%m-%d %H:%M')}")
+    st.write(course.description or tr("no_description"))
+    st.caption(tr("created_at", time=course.created_at.strftime('%Y-%m-%d %H:%M')))
 
     st.divider()
-    st.subheader("Course status")
+    st.subheader(tr("course_status"))
     documents = list_documents_for_course(current_user.id, course.id)
-    st.metric("Documents", len(documents))
-    st.write("Knowledge structure: not generated")
+    st.metric(tr("documents"), len(documents))
+    st.write(tr("knowledge_not_generated"))
 
     st.divider()
-    st.subheader("Upload course materials")
+    st.subheader(tr("upload_materials"))
     uploaded_files = st.file_uploader(
-        "Choose PDF, PPTX, TXT, or Markdown files",
+        tr("choose_files"),
         type=["pdf", "pptx", "txt", "md"],
         accept_multiple_files=True,
         key=f"course_upload_{course.id}",
     )
     document_type = st.selectbox(
-        "Material type",
+        tr("material_type"),
         ["TEXTBOOK", "SLIDES", "EXAM", "HOMEWORK", "NOTES", "OTHER"],
+        format_func=lambda value: tr(f"document_type_{value.lower()}"),
         index=5,
         key=f"document_type_{course.id}",
     )
-    if st.button("Save uploaded files", type="primary", disabled=not uploaded_files):
+    if st.button(tr("save_files"), type="primary", disabled=not uploaded_files):
         uploaded_count = 0
         for uploaded_file in uploaded_files:
             try:
@@ -183,42 +211,42 @@ def render_course_detail(current_user):
                     document_type=document_type,
                 )
             except DocumentUploadError as exc:
-                st.error(f"{uploaded_file.name}: {exc}")
+                st.error(tr("upload_failed", filename=uploaded_file.name, error=exc))
             else:
                 uploaded_count += 1
         if uploaded_count:
-            st.success(f"Saved {uploaded_count} file(s).")
+            st.success(tr("saved_files", count=uploaded_count))
             st.rerun()
 
     st.divider()
-    st.subheader("AI learning package")
+    st.subheader(tr("learning_package"))
     action_column, view_column = st.columns(2)
     if action_column.button(
-        "Generate AI learning package",
+        tr("generate_package"),
         type="primary",
         disabled=not documents,
         use_container_width=True,
     ):
-        with st.spinner("Analyzing course materials..."):
+        with st.spinner(tr("analyzing")):
             try:
-                analyze_course(course.id, current_user.id)
+                analyze_course(course.id, current_user.id, language=get_language())
             except Exception as exc:
-                st.error(f"Learning package generation failed: {exc}")
+                st.error(tr("generation_failed", error=exc))
             else:
-                st.success("Learning package generated.")
+                st.success(tr("generation_success"))
                 st.session_state.workspace_page = "learning_package"
                 st.rerun()
     if view_column.button(
-        "View latest learning package",
+        tr("view_package"),
         disabled=get_learning_package(course.id, current_user.id) is None,
         use_container_width=True,
     ):
         st.session_state.workspace_page = "learning_package"
         st.rerun()
 
-    st.subheader("Course materials")
+    st.subheader(tr("course_materials"))
     if not documents:
-        st.info("No course materials uploaded yet.")
+        st.info(tr("no_materials"))
         return
 
     for document in documents:
@@ -227,11 +255,13 @@ def render_course_detail(current_user):
             name_column.markdown(f"📄 **{document.original_filename}**")
             name_column.caption(
                 f"{format_file_size(document.file_size)} · "
-                f"Uploaded {document.uploaded_at.strftime('%Y-%m-%d %H:%M')}"
+                f"{tr('uploaded_at', time=document.uploaded_at.strftime('%Y-%m-%d %H:%M'))}"
             )
-            status_column.write(f"Status: `{document.processing_status}`")
-            status_column.caption(f"Type: {document.document_type}")
-            if action_column.button("Delete", key=f"delete_document_{document.id}"):
+            translated_status = tr(f"status_{document.processing_status}")
+            translated_type = tr(f"document_type_{document.document_type.lower()}")
+            status_column.write(tr("status", status=translated_status))
+            status_column.caption(tr("type", type=translated_type))
+            if action_column.button(tr("delete"), key=f"delete_document_{document.id}"):
                 delete_document_for_user(document.id, current_user.id, course.id)
                 st.rerun()
 
@@ -243,29 +273,30 @@ def render_learning_package(current_user):
         st.session_state.workspace_page = "dashboard"
         st.rerun()
 
-    if st.button("Back to course"):
+    if st.button(tr("back_to_course")):
         st.session_state.workspace_page = "course_detail"
         st.rerun()
 
-    st.title(f"{course.name} · Learning Package")
+    st.title(tr("package_title", course=course.name))
     package = get_learning_package(course.id, current_user.id)
     if package is None:
-        st.info("No learning package has been generated yet.")
+        st.info(tr("no_package"))
         return
-    st.caption(f"Version {package.version} · Status: {package.status}")
+    package_status = tr(f"status_{package.status}")
+    st.caption(tr("package_version", version=package.version, status=package_status))
     if package.status != "completed":
-        st.warning("The latest learning package is not available.")
+        st.warning(tr("package_unavailable"))
         return
 
     content = package.content_json or {}
     sections = [
-        ("Course Knowledge Map", "course_map"),
-        ("Chapter Summary", "chapter_summary"),
-        ("Key Points", "key_points"),
-        ("Formula Book", "formula_book"),
-        ("Exam Focus", "exam_focus"),
-        ("Practice Questions", "questions"),
-        ("Exam Strategy", "exam_strategy"),
+        (tr("course_map"), "course_map"),
+        (tr("chapter_summary"), "chapter_summary"),
+        (tr("key_points"), "key_points"),
+        (tr("formula_book"), "formula_book"),
+        (tr("exam_focus"), "exam_focus"),
+        (tr("practice_questions"), "questions"),
+        (tr("exam_strategy"), "exam_strategy"),
     ]
     for title, key in sections:
         st.subheader(title)
@@ -273,7 +304,7 @@ def render_learning_package(current_user):
         if value:
             st.json(value, expanded=True)
         else:
-            st.caption("No content generated for this section.")
+            st.caption(tr("empty_section"))
 
 
 def format_file_size(file_size):
