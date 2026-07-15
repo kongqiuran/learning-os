@@ -274,6 +274,12 @@ def render_course_detail(current_user):
     generation_in_progress = st.session_state.get(generation_in_progress_key, False)
     if st.session_state.pop(generation_error_key, False):
         st.error(tr("generation_failed_friendly"))
+        st.button(
+            tr("retry_generation"),
+            key=f"retry_generation_{course.id}",
+            on_click=request_package_generation,
+            args=(course.id,),
+        )
     action_column, view_column = st.columns(2)
     action_column.button(
         tr("generate_package"),

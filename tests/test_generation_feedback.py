@@ -40,7 +40,14 @@ class FakeStreamlit:
 class GenerationFeedbackTest(unittest.TestCase):
     def test_success_displays_all_stages_and_completion(self):
         ui = FakeStreamlit()
-        result = run_generation_with_feedback(lambda: "package", "zh", ui)
+        delays = []
+        result = run_generation_with_feedback(
+            lambda: "package",
+            "zh",
+            ui,
+            completion_delay=3,
+            sleep_func=delays.append,
+        )
 
         self.assertEqual(result, "package")
         rendered = "\n".join(str(value) for _, value, _ in ui.calls if value)
@@ -48,8 +55,8 @@ class GenerationFeedbackTest(unittest.TestCase):
             "generation_status_title",
             "generation_stage_reading",
             "generation_stage_analysis",
-            "generation_stage_formula",
-            "generation_stage_questions",
+            "generation_stage_content",
+            "generation_stage_packaging",
         ):
             self.assertIn(t(key, "zh"), rendered)
         self.assertTrue(
@@ -60,6 +67,9 @@ class GenerationFeedbackTest(unittest.TestCase):
         )
         status_call = next(call for call in ui.calls if call[0] == "status")
         self.assertTrue(status_call[2].get("expanded"))
+        updates = [kwargs for name, _, kwargs in ui.calls if name == "update"]
+        self.assertTrue(all(update.get("expanded") is True for update in updates))
+        self.assertEqual(delays, [3])
 
     def test_failure_sets_error_status_and_reraises(self):
         ui = FakeStreamlit()
@@ -73,7 +83,8 @@ class GenerationFeedbackTest(unittest.TestCase):
             any(
                 name == "update"
                 and kwargs.get("state") == "error"
-                and kwargs.get("label") == t("generation_failed_friendly", "en")
+                and kwargs.get("label") == t("generation_failed_status", "en")
+                and kwargs.get("expanded") is True
                 for name, _, kwargs in ui.calls
             )
         )
@@ -92,6 +103,7 @@ class GenerationFeedbackTest(unittest.TestCase):
         self.assertIn("disabled=not documents or generation_in_progress", source)
         self.assertIn("run_generation_with_feedback(", source)
         self.assertIn("logger.exception(", source)
+        self.assertIn('tr("retry_generation")', source)
 
 
 if __name__ == "__main__":
