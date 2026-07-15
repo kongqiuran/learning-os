@@ -23,17 +23,28 @@ from src.services.file_parser_service import extract_text  # noqa: E402
 
 class FakeLLMClient:
     def generate(self, system_prompt, user_prompt):
-        if "课程资料分析器" in system_prompt:
+        if '"question_patterns"' in system_prompt:
             return {
                 "summary": "Test summary",
-                "topics": ["Core topic"],
-                "importance_map": {"Core topic": "high"},
+                "topics": [
+                    {
+                        "name": "Core topic",
+                        "importance": 5,
+                        "exam_value": "Common calculation topic",
+                        "reason": "Repeated in the material",
+                    }
+                ],
+                "formulas": [],
+                "question_patterns": [],
+                "errors": [],
             }
-        if "课程级知识分析器" in system_prompt:
+        if '"formula_inventory"' in system_prompt:
             return {
                 "knowledge_map": {"Core topic": []},
                 "chapter_relations": [],
                 "priority_ranking": ["Core topic"],
+                "formula_inventory": [],
+                "exam_focus": [],
             }
         return {
             "course_map": {"Core topic": []},
@@ -49,6 +60,10 @@ class FakeLLMClient:
                 }
             ],
             "questions": [{"question": "Test?", "answer": "Yes"}],
+            "exam_strategy": {
+                "priority_order": ["Core topic"],
+                "study_advice": "Review the highest priority topic first.",
+            },
         }
 
 

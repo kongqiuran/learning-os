@@ -19,12 +19,21 @@ def analyze_document(document_type, source_type, document_text, llm_client=None)
             ensure_ascii=False,
         ),
     )
+    topics = list(result.get("topics", []))
+    importance_map = {
+        item.get("name", ""): item.get("importance", 1)
+        for item in topics
+        if isinstance(item, dict) and item.get("name")
+    }
     return {
         "document_type": document_type,
         "source_type": source_type,
         "summary": str(result.get("summary", "")),
-        "topics": list(result.get("topics", [])),
-        "importance_map": dict(result.get("importance_map", {})),
+        "topics": topics,
+        "formulas": list(result.get("formulas", [])),
+        "question_patterns": list(result.get("question_patterns", [])),
+        "errors": list(result.get("errors", [])),
+        "importance_map": importance_map or dict(result.get("importance_map", {})),
         "document_metadata": {
             "document_type": document_type,
             "source_type": source_type,

@@ -265,6 +265,7 @@ def render_learning_package(current_user):
         ("Formula Book", "formula_book"),
         ("Exam Focus", "exam_focus"),
         ("Practice Questions", "questions"),
+        ("Exam Strategy", "exam_strategy"),
     ]
     for title, key in sections:
         st.subheader(title)

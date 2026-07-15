@@ -130,7 +130,8 @@ def _get_or_create_document_analysis(document, llm_client):
 
 def _serialize_analysis(document, analysis):
     source_type = get_source_type(document.file_path, document.mime_type)
-    return {
+    serialized = dict(analysis.analysis_json or {})
+    serialized.update({
         "document_type": document.document_type,
         "source_type": source_type,
         "summary": analysis.summary,
@@ -140,4 +141,8 @@ def _serialize_analysis(document, analysis):
             "document_type": document.document_type,
             "source_type": source_type,
         },
-    }
+    })
+    serialized.setdefault("formulas", [])
+    serialized.setdefault("question_patterns", [])
+    serialized.setdefault("errors", [])
+    return serialized
