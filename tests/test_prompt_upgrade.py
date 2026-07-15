@@ -6,7 +6,7 @@ from src.ai.prompt_manager import get_prompt
 
 
 class PromptContractLLMClient:
-    def generate(self, system_prompt, user_prompt):
+    def generate(self, system_prompt, user_prompt, stage="unknown"):
         return {
             "course_map": {"Transform methods": ["Fourier", "Laplace"]},
             "chapter_summary": [{"chapter": "Transform methods", "exam_value": "high"}],

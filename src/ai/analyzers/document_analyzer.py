@@ -19,6 +19,7 @@ def analyze_document(document_type, source_type, document_text, llm_client=None,
             },
             ensure_ascii=False,
         ),
+        stage="document_analyzer",
     )
     topics = list(result.get("topics", []))
     importance_map = {

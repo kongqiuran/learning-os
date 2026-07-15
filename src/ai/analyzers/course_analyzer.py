@@ -26,4 +26,5 @@ def analyze_course_documents(document_analyses, llm_client=None, language="zh"):
     return client.generate(
         get_prompt("course_analyzer"),
         json.dumps({"documents": weighted, "language": language}, ensure_ascii=False),
+        stage="course_analyzer",
     )

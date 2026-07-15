@@ -37,7 +37,7 @@ class FakeUploadedFile:
 
 
 class FakeLLMClient:
-    def generate(self, system_prompt, user_prompt):
+    def generate(self, system_prompt, user_prompt, stage="unknown"):
         if '"question_patterns"' in system_prompt:
             return {
                 "summary": "Test summary",

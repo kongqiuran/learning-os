@@ -23,6 +23,7 @@ def generate_learning_package(course_analysis, llm_client=None, language="zh"):
             {"course_analysis": course_analysis, "language": language},
             ensure_ascii=False,
         ),
+        stage="learning_package_generator",
     )
     defaults = {"course_map": {}, "exam_strategy": {}}
     defaults.update({key: [] for key in PACKAGE_KEYS if key not in defaults})

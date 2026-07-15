@@ -13,7 +13,7 @@ class RecordingClient:
         self.response = response
         self.user_prompts = []
 
-    def generate(self, system_prompt, user_prompt):
+    def generate(self, system_prompt, user_prompt, stage="unknown"):
         self.user_prompts.append(json.loads(user_prompt))
         return self.response
 
