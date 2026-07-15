@@ -48,8 +48,8 @@ class GenerationFeedbackTest(unittest.TestCase):
             "generation_status_title",
             "generation_stage_reading",
             "generation_stage_analysis",
-            "generation_stage_content",
-            "generation_stage_packaging",
+            "generation_stage_formula",
+            "generation_stage_questions",
         ):
             self.assertIn(t(key, "zh"), rendered)
         self.assertTrue(
@@ -58,6 +58,8 @@ class GenerationFeedbackTest(unittest.TestCase):
                 for name, _, kwargs in ui.calls
             )
         )
+        status_call = next(call for call in ui.calls if call[0] == "status")
+        self.assertTrue(status_call[2].get("expanded"))
 
     def test_failure_sets_error_status_and_reraises(self):
         ui = FakeStreamlit()

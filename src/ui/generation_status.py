@@ -9,13 +9,15 @@ def run_generation_with_feedback(generate, language="zh", st_module=st):
         expanded=True,
     ) as status:
         st_module.info(t("generation_time_hint", language))
-        status.write(f"📂 {t('generation_stage_reading', language)}")
+        status.write(f"✅ {t('generation_stage_reading', language)}")
         status.caption(t("generation_stage_reading_help", language))
         status.update(label=t("generation_stage_analysis", language), state="running")
-        status.write(f"🧠 {t('generation_stage_analysis', language)}")
+        status.write(f"🔄 {t('generation_stage_analysis', language)}")
         status.caption(t("generation_stage_analysis_help", language))
-        status.write(f"🔥 {t('generation_stage_content', language)}")
-        status.caption(t("generation_stage_content_help", language))
+        status.write(f"⬜ {t('generation_stage_formula', language)}")
+        status.caption(t("generation_stage_formula_help", language))
+        status.write(f"⬜ {t('generation_stage_questions', language)}")
+        status.caption(t("generation_stage_questions_help", language))
 
         try:
             result = generate()
@@ -27,9 +29,6 @@ def run_generation_with_feedback(generate, language="zh", st_module=st):
             )
             raise
 
-        status.update(label=t("generation_stage_packaging", language), state="running")
-        status.write(f"📚 {t('generation_stage_packaging', language)}")
-        status.caption(t("generation_stage_packaging_help", language))
         status.update(
             label=t("generation_complete", language),
             state="complete",

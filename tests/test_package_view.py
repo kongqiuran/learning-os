@@ -4,9 +4,11 @@ from types import SimpleNamespace
 
 from src.ui.cards import (
     render_chapter_card,
+    render_exam_diagnosis_card,
     render_exam_focus_card,
     render_formula_card,
     render_question_card,
+    render_strategy_card,
 )
 from src.ui.package_view import render_package_view
 
@@ -102,10 +104,21 @@ class PackageViewTest(unittest.TestCase):
 
         zh_subheaders = [args[0] for name, args, _ in zh_ui.calls if name == "subheader"]
         en_subheaders = [args[0] for name, args, _ in en_ui.calls if name == "subheader"]
-        self.assertIn("考试路线", zh_subheaders)
-        self.assertIn("公式手册", zh_subheaders)
+        self.assertEqual(
+            zh_subheaders,
+            [
+                "考试诊断",
+                "必考重点",
+                "考试路线",
+                "公式速查表",
+                "高频练习题",
+                "课程知识地图",
+                "章节总结",
+            ],
+        )
+        self.assertEqual(en_subheaders[0], "Exam Diagnosis")
         self.assertIn("Exam Roadmap", en_subheaders)
-        self.assertIn("Formula Book", en_subheaders)
+        self.assertIn("Formula Quick Reference", en_subheaders)
 
     def test_cards_accept_missing_fields(self):
         ui = FakeStreamlit()
@@ -113,7 +126,27 @@ class PackageViewTest(unittest.TestCase):
         render_formula_card({}, "zh", ui)
         render_chapter_card({}, "zh", ui)
         render_question_card({}, 1, "zh", ui)
+        render_exam_diagnosis_card("Test", {}, 0, "—", "zh", ui)
+        render_strategy_card({}, "zh", ui)
         self.assertGreater(len(ui.calls), 0)
+
+    def test_diagnosis_is_derived_from_existing_package_fields(self):
+        ui = FakeStreamlit()
+        content = {
+            "exam_focus": [
+                {"topic": "Fourier", "importance": 5},
+                {"topic": "Laplace", "importance": 4},
+            ],
+            "study_strategy": {
+                "priority_order": ["Fourier", "Laplace"],
+                "study_advice": "Start with high-frequency calculations.",
+            },
+        }
+        render_exam_diagnosis_card("Signals", content, 3, "2026-07-15", "en", ui)
+        rendered = "\n".join(str(args[0]) for _, args, _ in ui.calls if args)
+        self.assertIn("Signals Exam Diagnosis", rendered)
+        self.assertIn("Fourier", rendered)
+        self.assertIn("Start with high-frequency calculations.", rendered)
 
     def test_large_question_set_renders_with_collapsed_answers(self):
         ui = FakeStreamlit()

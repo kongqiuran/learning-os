@@ -8,7 +8,8 @@ def render_exam_focus_card(item, language="zh", st_module=st):
     title = data.get("topic") or t("untitled_topic", language)
     importance = _importance_stars(data.get("importance"))
     with st_module.container(border=True):
-        st_module.markdown(f"### {title}  {importance}")
+        st_module.markdown(f"### {title}")
+        st_module.markdown(f"**{t('importance_label', language)}** {importance}")
         explanation = data.get("core_explanation") or data.get("reason")
         _render_text_section(st_module, t("core_explanation", language), explanation)
         _render_list_section(st_module, t("must_master", language), data.get("must_master"))
@@ -22,6 +23,68 @@ def render_exam_focus_card(item, language="zh", st_module=st):
         _render_text_section(st_module, t("memory_tips", language), data.get("memory_tips"))
         _render_text_section(st_module, t("study_advice", language), data.get("study_advice"))
         _render_list_section(st_module, t("evidence", language), data.get("evidence"))
+
+
+def render_exam_diagnosis_card(
+    course_name,
+    content,
+    document_count,
+    generated_time,
+    language="zh",
+    st_module=st,
+):
+    data = content if isinstance(content, dict) else {}
+    focus_items = [_as_dict(item, "topic") for item in _as_list(data.get("exam_focus"))]
+    strategy = data.get("study_strategy") or data.get("exam_strategy") or {}
+    strategy = strategy if isinstance(strategy, dict) else {}
+    priorities = _as_list(strategy.get("priority_order"))
+    if not priorities:
+        priorities = [item.get("topic") for item in focus_items if item.get("topic")]
+    priorities = priorities[:3]
+    importance_values = []
+    for item in focus_items:
+        try:
+            importance_values.append(max(1, min(5, int(item.get("importance", 3)))))
+        except (TypeError, ValueError):
+            continue
+    difficulty = round(sum(importance_values) / len(importance_values)) if importance_values else None
+    advice = strategy.get("recommended_schedule") or strategy.get("study_advice")
+
+    with st_module.container(border=True):
+        st_module.markdown(
+            f"## 🎯 {t('diagnosis_title', language).format(course=course_name)}"
+        )
+        metadata = st_module.columns(3)
+        metadata[0].metric(t("documents", language), document_count)
+        metadata[1].metric(
+            t("course_difficulty", language),
+            _importance_stars(difficulty) if difficulty else t("no_data", language),
+        )
+        metadata[2].metric(t("generated_at", language), generated_time)
+        _render_list_section(st_module, t("highest_priority", language), priorities)
+        _render_text_section(st_module, t("priority_advice", language), advice)
+        if not focus_items and not priorities and not advice:
+            st_module.caption(t("no_data", language))
+
+
+def render_strategy_card(strategy, language="zh", st_module=st):
+    data = strategy if isinstance(strategy, dict) else {}
+    with st_module.container(border=True):
+        _render_list_section(st_module, t("priority_order", language), data.get("priority_order"))
+        _render_list_section(
+            st_module,
+            t("before_exam_focus", language),
+            data.get("before_exam_focus"),
+        )
+        _render_list_section(
+            st_module,
+            t("avoid_wasting_time", language),
+            data.get("avoid_wasting_time"),
+        )
+        schedule = data.get("recommended_schedule") or data.get("study_advice")
+        _render_text_section(st_module, t("recommended_schedule", language), schedule)
+        if not data:
+            st_module.caption(t("no_data", language))
 
 
 def render_formula_card(item, language="zh", st_module=st):
