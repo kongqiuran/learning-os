@@ -1,3 +1,5 @@
+import logging
+
 import streamlit as st
 
 from src.auth.session import clear_current_user, get_current_user, set_current_user
@@ -24,7 +26,10 @@ from src.services.user_service import (
     authenticate_user,
     register_user,
 )
-from src.ui import render_package_view
+from src.ui import render_package_view, run_generation_with_feedback
+
+
+logger = logging.getLogger(__name__)
 
 
 st.set_page_config(
@@ -70,6 +75,11 @@ def render_language_selector():
 
 
 render_language_selector()
+
+
+def request_package_generation(course_id):
+    st.session_state[f"generation_requested_{course_id}"] = True
+    st.session_state[f"generation_in_progress_{course_id}"] = True
 
 
 def save_inbox_uploads(user_id, course_id, pending_uploads):
@@ -258,28 +268,51 @@ def render_course_detail(current_user):
 
     st.divider()
     st.subheader(tr("learning_package"))
+    generation_requested_key = f"generation_requested_{course.id}"
+    generation_in_progress_key = f"generation_in_progress_{course.id}"
+    generation_error_key = f"generation_error_{course.id}"
+    generation_in_progress = st.session_state.get(generation_in_progress_key, False)
+    if st.session_state.pop(generation_error_key, False):
+        st.error(tr("generation_failed_friendly"))
     action_column, view_column = st.columns(2)
-    if action_column.button(
+    action_column.button(
         tr("generate_package"),
         type="primary",
-        disabled=not documents,
+        disabled=not documents or generation_in_progress,
         use_container_width=True,
-    ):
-        with st.spinner(tr("analyzing")):
-            try:
-                analyze_course(course.id, current_user.id, language=get_language())
-            except Exception as exc:
-                st.error(tr("generation_failed", error=exc))
-            else:
-                st.success(tr("generation_success"))
-                st.session_state.workspace_page = "learning_package"
-                st.rerun()
+        key=f"generate_package_{course.id}",
+        on_click=request_package_generation,
+        args=(course.id,),
+    )
     if view_column.button(
         tr("view_package"),
         disabled=get_learning_package(course.id, current_user.id) is None,
         use_container_width=True,
     ):
         st.session_state.workspace_page = "learning_package"
+        st.rerun()
+
+    if st.session_state.pop(generation_requested_key, False):
+        try:
+            run_generation_with_feedback(
+                lambda: analyze_course(
+                    course.id,
+                    current_user.id,
+                    language=get_language(),
+                ),
+                language=get_language(),
+            )
+        except Exception:
+            logger.exception(
+                "Learning package generation failed for course_id=%s user_id=%s",
+                course.id,
+                current_user.id,
+            )
+            st.session_state[generation_error_key] = True
+        else:
+            st.session_state.workspace_page = "learning_package"
+        finally:
+            st.session_state[generation_in_progress_key] = False
         st.rerun()
 
     st.subheader(tr("course_materials"))
