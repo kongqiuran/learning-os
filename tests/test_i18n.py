@@ -29,7 +29,7 @@ class I18nTest(unittest.TestCase):
         self.assertIn('st.session_state.language = "zh"', app_source)
         self.assertIn('options=["zh", "en"]', app_source)
         self.assertIn('tr("generate_package")', app_source)
-        self.assertIn('tr("course_map")', app_source)
+        self.assertIn("render_package_view(", app_source)
         self.assertIn('("TEXTBOOK", "material_textbook"', app_source)
         self.assertIn('("SLIDES", "material_slides"', app_source)
         self.assertIn('("EXAM", "material_exam"', app_source)

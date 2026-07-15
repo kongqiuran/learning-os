@@ -24,6 +24,7 @@ from src.services.user_service import (
     authenticate_user,
     register_user,
 )
+from src.ui import render_package_view
 
 
 st.set_page_config(
@@ -325,23 +326,13 @@ def render_learning_package(current_user):
         st.warning(tr("package_unavailable"))
         return
 
-    content = package.content_json or {}
-    sections = [
-        (tr("course_map"), "course_map"),
-        (tr("chapter_summary"), "chapter_summary"),
-        (tr("key_points"), "key_points"),
-        (tr("formula_book"), "formula_book"),
-        (tr("exam_focus"), "exam_focus"),
-        (tr("practice_questions"), "questions"),
-        (tr("exam_strategy"), "exam_strategy"),
-    ]
-    for title, key in sections:
-        st.subheader(title)
-        value = content.get(key, {} if key == "course_map" else [])
-        if value:
-            st.json(value, expanded=True)
-        else:
-            st.caption(tr("empty_section"))
+    document_count = len(list_documents_for_course(current_user.id, course.id))
+    render_package_view(
+        course,
+        package,
+        document_count,
+        language=get_language(),
+    )
 
 
 def format_file_size(file_size):
