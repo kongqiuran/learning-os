@@ -35,6 +35,16 @@ st.set_page_config(
 create_database_tables()
 
 
+MATERIAL_INBOX = (
+    ("TEXTBOOK", "material_textbook", "material_textbook_description", ("pdf",)),
+    ("SLIDES", "material_slides", "material_slides_description", ("pdf", "pptx")),
+    ("EXAM", "material_exam", "material_exam_description", ("pdf",)),
+    ("HOMEWORK", "material_homework", "material_homework_description", ("pdf", "txt")),
+    ("NOTES", "material_notes", "material_notes_description", ("pdf", "txt", "md")),
+    ("OTHER", "material_other", "material_other_description", ("pdf", "pptx", "txt", "md")),
+)
+
+
 def get_language():
     if "language" not in st.session_state:
         st.session_state.language = "zh"
@@ -59,6 +69,29 @@ def render_language_selector():
 
 
 render_language_selector()
+
+
+def save_inbox_uploads(user_id, course_id, pending_uploads):
+    saved = {}
+    errors = []
+    for document_type, allowed_types, uploaded_files in pending_uploads:
+        for uploaded_file in uploaded_files or []:
+            extension = uploaded_file.name.rsplit(".", 1)[-1].lower() if "." in uploaded_file.name else ""
+            if extension not in allowed_types:
+                errors.append((uploaded_file.name, "unsupported"))
+                continue
+            try:
+                save_uploaded_document(
+                    user_id,
+                    course_id,
+                    uploaded_file,
+                    document_type=document_type,
+                )
+            except DocumentUploadError as exc:
+                errors.append((uploaded_file.name, str(exc)))
+            else:
+                saved.setdefault(document_type, []).append(uploaded_file.name)
+    return saved, errors
 
 
 def render_auth_page():
@@ -187,34 +220,38 @@ def render_course_detail(current_user):
 
     st.divider()
     st.subheader(tr("upload_materials"))
-    uploaded_files = st.file_uploader(
-        tr("choose_files"),
-        type=["pdf", "pptx", "txt", "md"],
-        accept_multiple_files=True,
-        key=f"course_upload_{course.id}",
-    )
-    document_type = st.selectbox(
-        tr("material_type"),
-        ["TEXTBOOK", "SLIDES", "EXAM", "HOMEWORK", "NOTES", "OTHER"],
-        format_func=lambda value: tr(f"document_type_{value.lower()}"),
-        index=5,
-        key=f"document_type_{course.id}",
-    )
-    if st.button(tr("save_files"), type="primary", disabled=not uploaded_files):
-        uploaded_count = 0
-        for uploaded_file in uploaded_files:
-            try:
-                save_uploaded_document(
-                    current_user.id,
-                    course.id,
-                    uploaded_file,
-                    document_type=document_type,
-                )
-            except DocumentUploadError as exc:
-                st.error(tr("upload_failed", filename=uploaded_file.name, error=exc))
+    st.caption(tr("material_inbox_help"))
+    pending_uploads = []
+    feedback = st.session_state.get(f"upload_feedback_{course.id}", {})
+    inbox_columns = st.columns(2)
+    for index, (document_type, title_key, description_key, allowed_types) in enumerate(MATERIAL_INBOX):
+        with inbox_columns[index % 2].container(border=True):
+            st.markdown(f"### {tr(title_key)}")
+            st.write(tr(description_key))
+            st.caption(tr("supported_formats", formats=", ".join(item.upper() for item in allowed_types)))
+            uploaded_files = st.file_uploader(
+                tr("drop_files"),
+                type=list(allowed_types),
+                accept_multiple_files=True,
+                key=f"course_upload_{course.id}_{document_type.lower()}",
+            )
+            pending_uploads.append((document_type, allowed_types, uploaded_files))
+            if feedback.get(document_type):
+                st.success(tr("saved_category_files", category=tr(title_key)))
+                for filename in feedback[document_type]:
+                    st.write(f"✓ {filename}")
+
+    has_pending_files = any(uploaded_files for _, _, uploaded_files in pending_uploads)
+    if st.button(tr("save_files"), type="primary", disabled=not has_pending_files):
+        saved, errors = save_inbox_uploads(current_user.id, course.id, pending_uploads)
+        for filename, error in errors:
+            if error == "unsupported":
+                st.error(f"{filename}: {tr('unsupported_material_format')}")
             else:
-                uploaded_count += 1
-        if uploaded_count:
+                st.error(tr("upload_failed", filename=filename, error=error))
+        if saved:
+            uploaded_count = sum(len(filenames) for filenames in saved.values())
+            st.session_state[f"upload_feedback_{course.id}"] = saved
             st.success(tr("saved_files", count=uploaded_count))
             st.rerun()
 

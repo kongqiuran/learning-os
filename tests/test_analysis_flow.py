@@ -19,6 +19,21 @@ from src.services.analysis_service import (  # noqa: E402
     get_learning_package,
 )
 from src.services.file_parser_service import extract_text  # noqa: E402
+from src.services.document_service import (  # noqa: E402
+    delete_document_for_user,
+    list_documents_for_course,
+    save_uploaded_document,
+)
+
+
+class FakeUploadedFile:
+    def __init__(self, name, mime_type, data):
+        self.name = name
+        self.type = mime_type
+        self._data = data
+
+    def getvalue(self):
+        return self._data
 
 
 class FakeLLMClient:
@@ -208,6 +223,63 @@ class AnalysisFlowTest(unittest.TestCase):
 
         self.assertEqual(extract_text(txt_path, "text/plain"), "Plain course notes")
         self.assertEqual(extract_text(md_path, "text/markdown"), "# Markdown course notes")
+
+    def test_material_inbox_types_multi_upload_and_delete(self):
+        pdf_path = Path(TEST_DIR.name) / "inbox.pdf"
+        pptx_path = Path(TEST_DIR.name) / "inbox.pptx"
+        self._make_pdf(pdf_path, "Signals and Systems chapter one")
+        presentation = Presentation()
+        slide = presentation.slides.add_slide(presentation.slide_layouts[5])
+        slide.shapes.title.text = "Chapter 01"
+        presentation.save(pptx_path)
+
+        with get_db_session() as session:
+            user = User(email="inbox@example.com", password_hash="test")
+            session.add(user)
+            session.flush()
+            course = Course(user_id=user.id, name="信号与系统")
+            session.add(course)
+            session.flush()
+            user_id, course_id = user.id, course.id
+
+        uploads = [
+            ("TEXTBOOK", FakeUploadedFile("CH1.pdf", "application/pdf", pdf_path.read_bytes())),
+            (
+                "SLIDES",
+                FakeUploadedFile(
+                    "Chapter01.pptx",
+                    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                    pptx_path.read_bytes(),
+                ),
+            ),
+            ("EXAM", FakeUploadedFile("A卷.pdf", "application/pdf", pdf_path.read_bytes())),
+            ("NOTES", FakeUploadedFile("note-1.txt", "text/plain", b"first note")),
+            ("NOTES", FakeUploadedFile("note-2.txt", "text/plain", b"second note")),
+        ]
+        for document_type, uploaded_file in uploads:
+            save_uploaded_document(
+                user_id,
+                course_id,
+                uploaded_file,
+                document_type=document_type,
+            )
+
+        documents = list_documents_for_course(user_id, course_id)
+        types_by_name = {document.original_filename: document.document_type for document in documents}
+        self.assertEqual(types_by_name["CH1.pdf"], "TEXTBOOK")
+        self.assertEqual(types_by_name["Chapter01.pptx"], "SLIDES")
+        self.assertEqual(types_by_name["A卷.pdf"], "EXAM")
+        self.assertEqual(types_by_name["note-1.txt"], "NOTES")
+        self.assertEqual(types_by_name["note-2.txt"], "NOTES")
+
+        deleted_document = next(item for item in documents if item.original_filename == "note-1.txt")
+        self.assertTrue(delete_document_for_user(deleted_document.id, user_id, course_id))
+        remaining_names = {
+            item.original_filename for item in list_documents_for_course(user_id, course_id)
+        }
+        self.assertNotIn("note-1.txt", remaining_names)
+        for document in list_documents_for_course(user_id, course_id):
+            delete_document_for_user(document.id, user_id, course_id)
 
     @staticmethod
     def _make_pdf(path, text):

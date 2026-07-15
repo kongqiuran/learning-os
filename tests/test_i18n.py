@@ -30,6 +30,23 @@ class I18nTest(unittest.TestCase):
         self.assertIn('options=["zh", "en"]', app_source)
         self.assertIn('tr("generate_package")', app_source)
         self.assertIn('tr("course_map")', app_source)
+        self.assertIn('("TEXTBOOK", "material_textbook"', app_source)
+        self.assertIn('("SLIDES", "material_slides"', app_source)
+        self.assertIn('("EXAM", "material_exam"', app_source)
+
+    def test_material_inbox_labels_switch_languages(self):
+        self.assertEqual(t("material_textbook", "zh"), "📘 教材")
+        self.assertEqual(t("material_textbook", "en"), "📘 Textbooks")
+        self.assertEqual(t("material_exam", "zh"), "📝 历年试卷")
+        self.assertEqual(t("material_exam", "en"), "📝 Past Exams")
+        self.assertEqual(
+            t("unsupported_material_format", "zh"),
+            "当前资料类型不支持该文件格式",
+        )
+        self.assertEqual(
+            t("unsupported_material_format", "en"),
+            "Unsupported file format for this material type",
+        )
 
     def test_language_is_sent_to_all_llm_stages(self):
         document_client = RecordingClient(
