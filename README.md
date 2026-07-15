@@ -235,3 +235,54 @@ learning-os/
 │   └── exporter.py
 └── README.md
 ```
+
+## React 产品前端（渐进迁移）
+
+Learning OS 正在保留原有 Streamlit 入口的同时，逐步增加面向学生的 React 产品界面。两套界面复用同一套 Python service 和数据库，但维护各自独立的浏览器会话。
+
+### 1. 启动原有 Streamlit
+
+原有入口没有变化：
+
+```powershell
+cd "D:\kongqiuran\ai\learning-os"
+streamlit run app.py
+```
+
+也可以继续双击 `start.bat`。
+
+### 2. 启动独立 API Gateway
+
+先安装 Python 依赖，再启动独立的 FastAPI 入口：
+
+```powershell
+cd "D:\kongqiuran\ai\learning-os"
+pip install -r requirements.txt
+python api_server.py
+```
+
+默认 API 地址为 `http://127.0.0.1:8000`，接口文档位于 `http://127.0.0.1:8000/api/docs`。公开部署前请在 `.env` 中设置足够长且随机的 `API_SESSION_SECRET`。
+
+### 3. 启动 React 开发服务器
+
+另开一个终端：
+
+```powershell
+cd "D:\kongqiuran\ai\learning-os"
+cd frontend
+pnpm install
+pnpm dev
+```
+
+访问 `http://127.0.0.1:5173`。开发服务器会把 `/api` 请求代理到独立 API Gateway。
+
+### 4. 验证前端构建
+
+```powershell
+cd "D:\kongqiuran\ai\learning-os"
+cd frontend
+pnpm typecheck
+pnpm build
+```
+
+当前 React 版本完成注册、登录、会话恢复、统一布局和 Design System。Dashboard、Course Space、Knowledge 的真实业务数据将在后续阶段接入；页面不会使用虚假课程或学习统计。
