@@ -39,12 +39,40 @@ export interface CourseCreateInput {
   description?: string
 }
 
-export interface FileSummary {
+export type DocumentStatus = 'uploaded' | 'processing' | 'completed' | 'failed'
+
+export interface DocumentSummary {
   id: number
   name: string
-  type: string
-  sizeLabel: string
-  status: 'uploaded' | 'processing' | 'completed' | 'failed'
+  mime_type: string
+  file_size: number
+  status: DocumentStatus
+  document_type: string
+  uploaded_at: string
+}
+
+export interface LearningPackage {
+  id: number
+  status: 'pending' | 'processing' | 'completed' | 'failed'
+  version: number
+  content: Record<string, unknown>
+  created_at: string
+}
+
+export interface CourseSpaceResponse {
+  course: CourseSummary
+  documents: DocumentSummary[]
+  learning_package: LearningPackage | null
+}
+
+export interface AssistantQueryInput {
+  question: string
+  current_section?: string
+}
+
+export interface AssistantQueryResponse {
+  answer: string
+  source_files: string[]
 }
 
 export interface KnowledgeSummary {

@@ -32,13 +32,84 @@ body {
 }
 
 button,
-input {
+input,
+select,
+textarea {
   font: inherit;
 }
 
 button,
 a {
   -webkit-tap-highlight-color: transparent;
+}
+
+.learning-markdown > :first-child {
+  margin-top: 0;
+}
+
+.learning-markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.learning-markdown h1,
+.learning-markdown h2,
+.learning-markdown h3 {
+  margin: 1.25rem 0 0.5rem;
+  color: #0f172a;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.learning-markdown p,
+.learning-markdown ul,
+.learning-markdown ol,
+.learning-markdown pre,
+.learning-markdown table {
+  margin: 0.65rem 0;
+}
+
+.learning-markdown ul,
+.learning-markdown ol {
+  padding-left: 1.25rem;
+}
+
+.learning-markdown ul {
+  list-style: disc;
+}
+
+.learning-markdown ol {
+  list-style: decimal;
+}
+
+.learning-markdown code {
+  border-radius: 0.35rem;
+  background: #f1f5f9;
+  padding: 0.1rem 0.3rem;
+  color: #334155;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.learning-markdown pre {
+  overflow-x: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.75rem;
+  background: #f8fafc;
+  padding: 0.85rem;
+}
+
+.learning-markdown table {
+  display: block;
+  width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+}
+
+.learning-markdown th,
+.learning-markdown td {
+  border: 1px solid #e5e7eb;
+  padding: 0.5rem 0.65rem;
+  text-align: left;
 }
 
 @media (prefers-reduced-motion: reduce) {

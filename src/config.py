@@ -39,6 +39,15 @@ def get_max_chars_per_request():
         return 60000
 
 
+def get_assistant_max_context_chars():
+    load_dotenv(ENV_FILE, override=True)
+    try:
+        configured_limit = int(os.getenv("ASSISTANT_MAX_CONTEXT_CHARS", "16000"))
+    except ValueError:
+        configured_limit = 16000
+    return max(4000, min(configured_limit, 30000))
+
+
 def get_database_url():
     load_dotenv(ENV_FILE, override=True)
     configured_url = os.getenv("DATABASE_URL", "").strip()

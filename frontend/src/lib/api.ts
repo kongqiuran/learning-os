@@ -1,10 +1,15 @@
 import type {
   ApiErrorPayload,
+  AssistantQueryInput,
+  AssistantQueryResponse,
   AuthResponse,
   CourseCreateInput,
   CourseListResponse,
   CourseSummary,
+  CourseSpaceResponse,
   DashboardResponse,
+  DocumentSummary,
+  LearningPackage,
 } from '../types/api'
 
 export class ApiError extends Error {
@@ -28,16 +33,19 @@ const localizedMessages: Record<string, string> = {
   invalid_request: '提交的信息有误，请检查后重试。',
   invalid_course: '请输入课程名称。',
   course_not_found: '课程不存在或你没有访问权限。',
+  invalid_document: '资料上传失败，请检查文件格式和大小。',
+  document_not_found: '资料不存在或你没有操作权限。',
+  generation_in_progress: '课程内容正在整理，请稍候。',
+  generation_failed: '课程内容整理失败，请检查模型配置后重试。',
+  assistant_unavailable: '课程助手暂时无法回答，请稍后重试。',
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const isFormData = options.body instanceof FormData
   const response = await fetch(path, {
     ...options,
     credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
+    headers: isFormData ? options.headers : { 'Content-Type': 'application/json', ...options.headers },
   })
 
   if (!response.ok) {
@@ -75,4 +83,21 @@ export const api = {
     }),
   deleteCourse: (courseId: number) =>
     request<{ message: string }>(`/api/courses/${courseId}`, { method: 'DELETE' }),
+  courseSpace: (courseId: number | string) =>
+    request<CourseSpaceResponse>(`/api/courses/${courseId}/space`),
+  uploadDocument: (courseId: number | string, file: File, documentType: string) => {
+    const body = new FormData()
+    body.append('file', file)
+    body.append('document_type', documentType)
+    return request<DocumentSummary>(`/api/courses/${courseId}/documents`, { method: 'POST', body })
+  },
+  deleteDocument: (courseId: number | string, documentId: number) =>
+    request<{ message: string }>(`/api/courses/${courseId}/documents/${documentId}`, { method: 'DELETE' }),
+  generateLearningPackage: (courseId: number | string) =>
+    request<LearningPackage>(`/api/courses/${courseId}/learning-package/generate`, { method: 'POST' }),
+  queryCourseAssistant: (courseId: number | string, input: AssistantQueryInput) =>
+    request<AssistantQueryResponse>(`/api/courses/${courseId}/assistant/query`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
 }

@@ -1,6 +1,7 @@
 from datetime import datetime
+from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class LoginRequest(BaseModel):
@@ -59,3 +60,44 @@ class DashboardResponse(BaseModel):
     course_count: int
     document_count: int
     courses: list[CourseSummaryResponse]
+
+
+class DocumentResponse(BaseModel):
+    id: int
+    name: str
+    mime_type: str
+    file_size: int
+    status: str
+    document_type: str
+    uploaded_at: datetime
+
+
+class LearningPackageResponse(BaseModel):
+    id: int
+    status: str
+    version: int
+    content: dict[str, Any]
+    created_at: datetime
+
+
+class CourseSpaceResponse(BaseModel):
+    course: CourseDetailResponse
+    documents: list[DocumentResponse]
+    learning_package: LearningPackageResponse | None
+
+
+class AssistantQueryRequest(BaseModel):
+    question: str = Field(min_length=1, max_length=1000)
+    current_section: str | None = Field(default=None, max_length=200)
+
+    @field_validator("question")
+    @classmethod
+    def validate_question(cls, value):
+        if not value.strip():
+            raise ValueError("Question must not be blank.")
+        return value.strip()
+
+
+class AssistantQueryResponse(BaseModel):
+    answer: str
+    source_files: list[str]
