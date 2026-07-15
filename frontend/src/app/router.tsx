@@ -6,6 +6,7 @@ import { CourseSpacePage } from '../pages/CourseSpacePage'
 import { DashboardPage } from '../pages/DashboardPage'
 import { DemoPage } from '../pages/DemoPage'
 import { KnowledgeWorkspacePage } from '../pages/KnowledgeWorkspacePage'
+import { KnowledgeDetailPage } from '../pages/KnowledgeDetailPage'
 import { LoginPage } from '../pages/LoginPage'
 import { RegisterPage } from '../pages/RegisterPage'
 import { SettingsPage } from '../pages/SettingsPage'
@@ -23,6 +24,7 @@ export function AppRouter() {
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/courses/:courseId" element={<CourseSpacePage />} />
             <Route path="/courses/:courseId/knowledge" element={<KnowledgeWorkspacePage />} />
+            <Route path="/courses/:courseId/knowledge/:knowledgeId" element={<KnowledgeDetailPage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Route>
         </Route>

@@ -79,9 +79,34 @@ export interface KnowledgeSummary {
   id: string
   title: string
   content: string
-  courseName: string
-  sourceFile: string
-  updatedAt: string
+  importance: number | null
+  course_id: number
+  course_name: string
+  document_id: number
+  source_file: string
+  updated_at: string
   viewed: boolean
-  importance?: number
+  viewed_at: string | null
+}
+
+export interface KnowledgeDetail extends KnowledgeSummary {
+  core_explanation: string
+  exam_value: string
+  must_master: unknown[]
+  memory_tips: string
+  reason: string
+  source_formulas: unknown[]
+  source_errors: unknown[]
+}
+
+export interface KnowledgeListResponse {
+  course: { id: number; name: string }
+  knowledge_count: number
+  items: KnowledgeSummary[]
+}
+
+export interface KnowledgeViewedResponse {
+  knowledge_id: string
+  viewed: boolean
+  viewed_at: string
 }

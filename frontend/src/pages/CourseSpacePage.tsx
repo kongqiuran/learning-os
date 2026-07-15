@@ -71,6 +71,7 @@ export function CourseSpacePage() {
           learningPackage={learningPackage}
           generating={generation.isPending}
           onGenerate={() => generation.mutate()}
+          onOpenKnowledge={() => navigate(`/courses/${courseId}/knowledge`)}
         />
 
         <main className="min-w-0 space-y-5">

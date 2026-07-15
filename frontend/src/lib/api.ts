@@ -10,6 +10,9 @@ import type {
   DashboardResponse,
   DocumentSummary,
   LearningPackage,
+  KnowledgeDetail,
+  KnowledgeListResponse,
+  KnowledgeViewedResponse,
 } from '../types/api'
 
 export class ApiError extends Error {
@@ -38,6 +41,7 @@ const localizedMessages: Record<string, string> = {
   generation_in_progress: '课程内容正在整理，请稍候。',
   generation_failed: '课程内容整理失败，请检查模型配置后重试。',
   assistant_unavailable: '课程助手暂时无法回答，请稍后重试。',
+  knowledge_not_found: '知识内容不存在或你没有访问权限。',
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -99,5 +103,13 @@ export const api = {
     request<AssistantQueryResponse>(`/api/courses/${courseId}/assistant/query`, {
       method: 'POST',
       body: JSON.stringify(input),
+    }),
+  courseKnowledge: (courseId: number | string) =>
+    request<KnowledgeListResponse>(`/api/courses/${courseId}/knowledge`),
+  knowledge: (knowledgeId: string) =>
+    request<KnowledgeDetail>(`/api/knowledge/${encodeURIComponent(knowledgeId)}`),
+  markKnowledgeViewed: (knowledgeId: string) =>
+    request<KnowledgeViewedResponse>(`/api/knowledge/${encodeURIComponent(knowledgeId)}/viewed`, {
+      method: 'PATCH',
     }),
 }

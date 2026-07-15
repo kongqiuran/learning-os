@@ -1,4 +1,4 @@
-import { BookOpenText, FileText, LoaderCircle, Sparkles } from 'lucide-react'
+import { BookMarked, BookOpenText, FileText, LoaderCircle, Sparkles } from 'lucide-react'
 
 import type { LearningPackage } from '../../types/api'
 import { Button } from '../ui/Button'
@@ -10,12 +10,14 @@ export function CourseNavigation({
   learningPackage,
   generating,
   onGenerate,
+  onOpenKnowledge,
 }: {
   courseName: string
   documentCount: number
   learningPackage: LearningPackage | null
   generating: boolean
   onGenerate: () => void
+  onOpenKnowledge: () => void
 }) {
   const status = getCourseStatus(documentCount, learningPackage, generating)
 
@@ -31,6 +33,13 @@ export function CourseNavigation({
       <nav className="mt-5 space-y-1" aria-label="课程空间导航">
         <NavigationButton icon={FileText} label={`课程资料 · ${documentCount}`} target="course-materials" />
         <NavigationButton icon={BookOpenText} label="学习内容" target="learning-content" />
+        <button
+          type="button"
+          className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm text-slate-600 hover:bg-slate-100 hover:text-slate-950"
+          onClick={onOpenKnowledge}
+        >
+          <BookMarked className="size-4" /> 课程知识
+        </button>
       </nav>
 
       <div className="mt-5 border-t border-slate-100 pt-5">

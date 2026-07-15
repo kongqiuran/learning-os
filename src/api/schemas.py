@@ -101,3 +101,44 @@ class AssistantQueryRequest(BaseModel):
 class AssistantQueryResponse(BaseModel):
     answer: str
     source_files: list[str]
+
+
+class KnowledgeCourseResponse(BaseModel):
+    id: int
+    name: str
+
+
+class KnowledgeSummaryResponse(BaseModel):
+    id: str
+    title: str
+    content: str
+    importance: int | None
+    course_id: int
+    course_name: str
+    document_id: int
+    source_file: str
+    updated_at: datetime
+    viewed: bool
+    viewed_at: datetime | None
+
+
+class KnowledgeDetailResponse(KnowledgeSummaryResponse):
+    core_explanation: str
+    exam_value: str
+    must_master: list[Any]
+    memory_tips: str
+    reason: str
+    source_formulas: list[Any]
+    source_errors: list[Any]
+
+
+class KnowledgeListResponse(BaseModel):
+    course: KnowledgeCourseResponse
+    knowledge_count: int
+    items: list[KnowledgeSummaryResponse]
+
+
+class KnowledgeViewedResponse(BaseModel):
+    knowledge_id: str
+    viewed: bool
+    viewed_at: datetime

@@ -4,6 +4,8 @@ from src.api.schemas import (
     CourseSummaryResponse,
     DocumentResponse,
     LearningPackageResponse,
+    KnowledgeDetailResponse,
+    KnowledgeSummaryResponse,
 )
 
 
@@ -58,4 +60,34 @@ def serialize_course_space(course, documents, learning_package):
         course=serialize_course_detail(course, documents, learning_package),
         documents=[serialize_document(document) for document in documents],
         learning_package=serialize_learning_package(learning_package),
+    )
+
+
+def serialize_knowledge_summary(item):
+    return KnowledgeSummaryResponse(
+        id=item.id,
+        title=item.title,
+        content=item.content,
+        importance=item.importance,
+        course_id=item.course_id,
+        course_name=item.course_name,
+        document_id=item.document_id,
+        source_file=item.source_file,
+        updated_at=item.updated_at,
+        viewed=item.viewed,
+        viewed_at=item.viewed_at,
+    )
+
+
+def serialize_knowledge_detail(item):
+    summary = serialize_knowledge_summary(item)
+    return KnowledgeDetailResponse(
+        **summary.model_dump(),
+        core_explanation=item.core_explanation,
+        exam_value=item.exam_value,
+        must_master=item.must_master,
+        memory_tips=item.memory_tips,
+        reason=item.reason,
+        source_formulas=item.source_formulas,
+        source_errors=item.source_errors,
     )
