@@ -19,8 +19,24 @@ export interface CourseSummary {
   id: number
   name: string
   description: string | null
-  documentCount: number
-  updatedAt: string
+  created_at: string
+  updated_at: string
+  document_count: number
+}
+
+export interface DashboardResponse {
+  course_count: number
+  document_count: number
+  courses: CourseSummary[]
+}
+
+export interface CourseListResponse {
+  courses: CourseSummary[]
+}
+
+export interface CourseCreateInput {
+  name: string
+  description?: string
 }
 
 export interface FileSummary {

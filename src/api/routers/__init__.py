@@ -1,4 +1,4 @@
-from src.api.routers import auth, health
+from src.api.routers import auth, courses, health
 
 
-__all__ = ["auth", "health"]
+__all__ = ["auth", "courses", "health"]

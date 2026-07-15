@@ -1,4 +1,11 @@
-import type { ApiErrorPayload, AuthResponse } from '../types/api'
+import type {
+  ApiErrorPayload,
+  AuthResponse,
+  CourseCreateInput,
+  CourseListResponse,
+  CourseSummary,
+  DashboardResponse,
+} from '../types/api'
 
 export class ApiError extends Error {
   constructor(
@@ -19,6 +26,8 @@ const localizedMessages: Record<string, string> = {
   email_registered: '该邮箱已经注册。',
   invalid_registration: '注册信息不完整，请检查后重试。',
   invalid_request: '提交的信息有误，请检查后重试。',
+  invalid_course: '请输入课程名称。',
+  course_not_found: '课程不存在或你没有访问权限。',
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -56,4 +65,14 @@ export const api = {
       body: JSON.stringify({ email, password, confirm_password: confirmPassword }),
     }),
   logout: () => request<{ message: string }>('/api/auth/logout', { method: 'POST' }),
+  dashboard: () => request<DashboardResponse>('/api/dashboard'),
+  courses: () => request<CourseListResponse>('/api/courses'),
+  course: (courseId: number | string) => request<CourseSummary>(`/api/courses/${courseId}`),
+  createCourse: (input: CourseCreateInput) =>
+    request<CourseSummary>('/api/courses', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+  deleteCourse: (courseId: number) =>
+    request<{ message: string }>(`/api/courses/${courseId}`, { method: 'DELETE' }),
 }

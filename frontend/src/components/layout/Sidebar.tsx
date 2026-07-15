@@ -46,7 +46,7 @@ export function Sidebar({ onNavigate }: SidebarProps) {
         className="mt-7"
         fullWidth
         onClick={() => {
-          navigate('/dashboard')
+          navigate('/dashboard?create=1')
           onNavigate?.()
         }}
       >

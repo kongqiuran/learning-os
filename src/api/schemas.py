@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class LoginRequest(BaseModel):
@@ -31,3 +31,31 @@ class MessageResponse(BaseModel):
 class HealthResponse(BaseModel):
     status: str
     service: str
+
+
+class CourseCreateRequest(BaseModel):
+    name: str = Field(max_length=200)
+    description: str | None = None
+
+
+class CourseSummaryResponse(BaseModel):
+    id: int
+    name: str
+    description: str | None
+    created_at: datetime
+    updated_at: datetime
+    document_count: int
+
+
+class CourseDetailResponse(CourseSummaryResponse):
+    pass
+
+
+class CourseListResponse(BaseModel):
+    courses: list[CourseSummaryResponse]
+
+
+class DashboardResponse(BaseModel):
+    course_count: int
+    document_count: int
+    courses: list[CourseSummaryResponse]
