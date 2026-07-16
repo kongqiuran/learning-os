@@ -77,6 +77,10 @@ class LearningPackageResponse(BaseModel):
     status: str
     version: int
     content: dict[str, Any]
+    current_stage: str | None = None
+    retry_count: int = 0
+    error_type: str | None = None
+    error_detail: str | None = None
     created_at: datetime
 
 

@@ -30,6 +30,8 @@ class LLMConfig:
     api_key: str
     base_url: str
     model: str
+    timeout_seconds: float
+    max_attempts: int
 
 
 def get_llm_config():
@@ -39,7 +41,25 @@ def get_llm_config():
         api_key=os.getenv("LLM_API_KEY", "").strip(),
         base_url=os.getenv("LLM_BASE_URL", "https://api.deepseek.com").strip(),
         model=os.getenv("LLM_MODEL", "deepseek-v4-flash").strip(),
+        timeout_seconds=_get_float_setting("LLM_TIMEOUT_SECONDS", 120.0, 30.0, 300.0),
+        max_attempts=_get_int_setting("LLM_MAX_ATTEMPTS", 3, 1, 4),
     )
+
+
+def _get_float_setting(name, default, minimum, maximum):
+    try:
+        value = float(os.getenv(name, str(default)))
+    except ValueError:
+        value = default
+    return max(minimum, min(value, maximum))
+
+
+def _get_int_setting(name, default, minimum, maximum):
+    try:
+        value = int(os.getenv(name, str(default)))
+    except ValueError:
+        value = default
+    return max(minimum, min(value, maximum))
 
 
 def get_max_chars_per_request():

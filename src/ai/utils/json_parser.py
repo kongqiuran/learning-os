@@ -1,6 +1,8 @@
 import json
 import re
 
+from json_repair import repair_json
+
 
 class LLMJSONParseError(ValueError):
     pass
@@ -18,8 +20,14 @@ def parse_llm_json(response_text):
         try:
             return json.loads(repaired)
         except json.JSONDecodeError as repaired_error:
+            try:
+                repaired_object = repair_json(candidate, return_objects=True)
+                if isinstance(repaired_object, (dict, list)):
+                    return repaired_object
+            except Exception:
+                pass
             raise LLMJSONParseError(
-                "Unable to parse the LLM response as JSON after lightweight repair. "
+                "Unable to parse the LLM response as JSON after repair. "
                 f"Initial error: {initial_error.msg}; repaired error: {repaired_error.msg}."
             ) from repaired_error
 

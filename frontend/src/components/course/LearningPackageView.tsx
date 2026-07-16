@@ -32,7 +32,12 @@ export function LearningPackageView({
   }
 
   if (learningPackage?.status === 'failed') {
-    return <StatePanel variant="error" title="上次整理没有完成" description="请检查资料与模型配置，然后从左侧重新整理课程内容。" />
+    const diagnostics = [
+      learningPackage.current_stage ? `阶段：${learningPackage.current_stage}` : null,
+      learningPackage.error_type ? `原因：${learningPackage.error_type}` : null,
+      `尝试次数：${learningPackage.retry_count + 1}/3`,
+    ].filter(Boolean).join('；')
+    return <StatePanel variant="error" title="上次整理没有完成" description={`${diagnostics}。请从左侧重新整理课程内容。`} />
   }
 
   if (!learningPackage || learningPackage.status !== 'completed') {

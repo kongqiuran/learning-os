@@ -27,6 +27,13 @@ class LLMJSONParserTest(unittest.TestCase):
             {"name": "test", "items": [1, 2]},
         )
 
+    def test_repairs_single_quotes(self):
+        response = "{'name': 'test', 'items': [1, 2,],}"
+        self.assertEqual(
+            parse_llm_json(response),
+            {"name": "test", "items": [1, 2]},
+        )
+
     def test_extracts_json_surrounded_by_plain_text(self):
         response = 'Here is the result:\n{"name": "test"}\nI hope this helps.'
         self.assertEqual(parse_llm_json(response), {"name": "test"})

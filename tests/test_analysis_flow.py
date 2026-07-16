@@ -9,6 +9,7 @@ from pptx import Presentation
 TEST_DIR = tempfile.TemporaryDirectory()
 
 from src.database import create_database_tables, get_db_session  # noqa: E402
+from src.ai.llm_client import LLMGenerationError  # noqa: E402
 from src.models import Course, Document, DocumentAnalysis, LearningPackage, User  # noqa: E402
 from src.services.analysis_service import (  # noqa: E402
     _validate_document_course_binding,
@@ -78,6 +79,17 @@ class FakeLLMClient:
                 "study_advice": "Review the highest priority topic first.",
             },
         }
+
+
+class FailingLLMClient:
+    def generate(self, system_prompt, user_prompt, stage="unknown"):
+        raise LLMGenerationError(
+            "Invalid structured output.",
+            stage=stage,
+            retry_count=2,
+            error_type="JSONParseError",
+            response_preview="broken output",
+        )
 
 
 class AnalysisFlowTest(unittest.TestCase):
@@ -194,6 +206,30 @@ class AnalysisFlowTest(unittest.TestCase):
         self.assertEqual(result.status, "completed")
         with get_db_session() as session:
             self.assertEqual(session.query(LearningPackage).count(), 1)
+
+    def test_failed_task_persists_stage_retry_and_error_detail(self):
+        pdf_path = Path(TEST_DIR.name) / "failure.pdf"
+        self._make_pdf(pdf_path, "Failure diagnostics content")
+        with get_db_session() as session:
+            user = User(email="failure@example.com", password_hash="test")
+            session.add(user)
+            session.flush()
+            course = Course(user_id=user.id, name="Failure course")
+            session.add(course)
+            session.flush()
+            session.add(self._document(user.id, course.id, pdf_path))
+            session.flush()
+            user_id, course_id = user.id, course.id
+
+        with self.assertRaises(LLMGenerationError):
+            analyze_course(course_id, user_id, llm_client=FailingLLMClient())
+
+        package = get_learning_package(course_id, user_id)
+        self.assertEqual(package.status, "failed")
+        self.assertEqual(package.current_stage, "document_analyzer")
+        self.assertEqual(package.retry_count, 2)
+        self.assertEqual(package.error_type, "JSONParseError")
+        self.assertIn("broken output", package.error_detail)
 
     def test_pdf_and_pptx_enter_analysis_flow(self):
         pdf_path = Path(TEST_DIR.name) / "formats.pdf"

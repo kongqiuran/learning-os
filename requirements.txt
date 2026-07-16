@@ -1,6 +1,7 @@
 streamlit
 python-dotenv
 openai
+json-repair>=0.30,<1.0
 pypdf
 PyMuPDF
 python-pptx

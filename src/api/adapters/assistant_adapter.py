@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from sqlalchemy import select
 
 from src.ai.llm_client import LLMClient
+from src.ai.prompt_manager import STRUCTURED_OUTPUT_RULES
 from src.config import get_assistant_max_context_chars
 from src.database import get_db_session
 from src.models import Document, DocumentAnalysis
@@ -130,10 +131,11 @@ def _to_text(value):
 
 
 def _system_prompt():
-    return (
+    prompt = (
         "You are the course assistant inside Learning OS. Answer only from the supplied "
         "course context. Do not use outside knowledge or invent facts. If the context does "
         f"not support an answer, return exactly {{\"answer\": \"{INSUFFICIENT_CONTEXT_ANSWER}\"}}. "
         "Otherwise return a JSON object with one concise Chinese field named answer. Explain "
         "the concept for a university student and distinguish facts from interpretation."
     )
+    return f"{prompt}\n\n{STRUCTURED_OUTPUT_RULES}"

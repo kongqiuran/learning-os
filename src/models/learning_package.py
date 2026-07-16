@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, JSON, String
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.database.base import Base
@@ -21,6 +21,10 @@ class LearningPackage(Base):
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
     content_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    current_stage: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    error_type: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    error_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 
     course: Mapped["Course"] = relationship(back_populates="learning_packages")

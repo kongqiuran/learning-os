@@ -51,6 +51,10 @@ def serialize_learning_package(package):
         status=package.status,
         version=package.version,
         content=content,
+        current_stage=getattr(package, "current_stage", None),
+        retry_count=getattr(package, "retry_count", 0) or 0,
+        error_type=getattr(package, "error_type", None),
+        error_detail=getattr(package, "error_detail", None),
         created_at=package.created_at,
     )
 

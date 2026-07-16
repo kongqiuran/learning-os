@@ -56,6 +56,10 @@ export interface LearningPackage {
   status: 'pending' | 'processing' | 'completed' | 'failed'
   version: number
   content: Record<string, unknown>
+  current_stage: string | null
+  retry_count: number
+  error_type: string | null
+  error_detail: string | null
   created_at: string
 }
 

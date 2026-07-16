@@ -3,6 +3,7 @@ from sqlalchemy import func, select
 from src.ai.analyzers.course_analyzer import analyze_course_documents
 from src.ai.analyzers.document_analyzer import analyze_document
 from src.ai.generators.learning_package_generator import generate_learning_package
+from src.ai.llm_client import LLMClient
 from src.config import get_max_chars_per_request
 from src.database import get_db_session
 from src.models import Course, Document, DocumentAnalysis, LearningPackage
@@ -23,32 +24,62 @@ def analyze_course(course_id, user_id, llm_client=None, language="zh", package_i
         else _create_package(course.id, "processing")
     )
     try:
-        analyses = [
-            _get_or_create_document_analysis(document, llm_client, language)
-            for document in documents
-        ]
+        client = llm_client or LLMClient(
+            progress_callback=lambda **progress: _update_package_progress(
+                package.id,
+                **progress,
+            )
+        )
+        analyses = []
+        for document in documents:
+            _update_package_progress(package.id, "document_analyzer", 0)
+            analyses.append(
+                _get_or_create_document_analysis(document, client, language)
+            )
+        _update_package_progress(package.id, "course_analyzer", 0)
         course_analysis = analyze_course_documents(
             analyses,
-            llm_client=llm_client,
+            llm_client=client,
             language=language,
         )
+        _update_package_progress(package.id, "learning_package_generator", 0)
         content = generate_learning_package(
             course_analysis,
-            llm_client=llm_client,
+            llm_client=client,
             language=language,
         )
         with get_db_session() as session:
             stored_package = session.get(LearningPackage, package.id)
             stored_package.status = "completed"
             stored_package.content_json = content
+            stored_package.current_stage = "completed"
+            stored_package.error_type = None
+            stored_package.error_detail = None
         package.status = "completed"
         package.content_json = content
+        package.current_stage = "completed"
+        package.error_type = None
+        package.error_detail = None
         return package
-    except Exception:
+    except Exception as exc:
+        error_type = getattr(exc, "error_type", type(exc).__name__)
+        error_detail = _format_error_detail(exc)
         with get_db_session() as session:
             stored_package = session.get(LearningPackage, package.id)
             if stored_package is not None:
                 stored_package.status = "failed"
+                stored_package.current_stage = getattr(
+                    exc,
+                    "stage",
+                    stored_package.current_stage or "unknown",
+                )
+                stored_package.retry_count = getattr(
+                    exc,
+                    "retry_count",
+                    stored_package.retry_count or 0,
+                )
+                stored_package.error_type = error_type
+                stored_package.error_detail = error_detail
                 stored_package.content_json = {
                     "error": {
                         "code": "generation_failed",
@@ -130,6 +161,8 @@ def _create_package(course_id, status):
             status=status,
             version=(latest_version or 0) + 1,
             content_json={},
+            current_stage="pending" if status == "pending" else "starting",
+            retry_count=0,
         )
         session.add(package)
         session.flush()
@@ -149,8 +182,29 @@ def _start_existing_package(package_id, course_id):
         if package.status not in {"pending", "processing"}:
             raise ValueError("The generation task is not active.")
         package.status = "processing"
+        package.current_stage = "starting"
+        package.retry_count = 0
+        package.error_type = None
+        package.error_detail = None
         session.flush()
     return package
+
+
+def _update_package_progress(package_id, stage, retry_count):
+    with get_db_session() as session:
+        package = session.get(LearningPackage, int(package_id))
+        if package is None:
+            return
+        package.current_stage = stage
+        package.retry_count = int(retry_count)
+
+
+def _format_error_detail(exc):
+    detail = str(exc).strip() or type(exc).__name__
+    preview = getattr(exc, "response_preview", None)
+    if preview:
+        detail = f"{detail} Response preview: {preview}"
+    return detail[:4000]
 
 
 def _get_or_create_document_analysis(document, llm_client, language="zh"):

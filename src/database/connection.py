@@ -43,6 +43,7 @@ def create_database_tables():
 
     Base.metadata.create_all(bind=engine)
     _upgrade_sqlite_document_columns()
+    _upgrade_sqlite_learning_package_columns()
 
 
 def _upgrade_sqlite_document_columns():
@@ -62,6 +63,31 @@ def _upgrade_sqlite_document_columns():
             if column_name not in existing_columns:
                 connection.execute(
                     text(f"ALTER TABLE documents ADD COLUMN {column_name} {column_definition}")
+                )
+
+
+def _upgrade_sqlite_learning_package_columns():
+    if not DATABASE_URL.startswith("sqlite"):
+        return
+
+    existing_columns = {
+        column["name"] for column in inspect(engine).get_columns("learning_packages")
+    }
+    required_columns = {
+        "current_stage": "VARCHAR(80)",
+        "retry_count": "INTEGER NOT NULL DEFAULT 0",
+        "error_type": "VARCHAR(120)",
+        "error_detail": "TEXT",
+    }
+
+    with engine.begin() as connection:
+        for column_name, column_definition in required_columns.items():
+            if column_name not in existing_columns:
+                connection.execute(
+                    text(
+                        f"ALTER TABLE learning_packages ADD COLUMN "
+                        f"{column_name} {column_definition}"
+                    )
                 )
 
 
