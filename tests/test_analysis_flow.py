@@ -1,4 +1,3 @@
-import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -8,14 +7,13 @@ from pptx import Presentation
 
 
 TEST_DIR = tempfile.TemporaryDirectory()
-os.environ["DATABASE_URL"] = f"sqlite:///{(Path(TEST_DIR.name) / 'test.db').as_posix()}"
 
 from src.database import create_database_tables, get_db_session  # noqa: E402
-from src.database.connection import engine  # noqa: E402
 from src.models import Course, Document, DocumentAnalysis, LearningPackage, User  # noqa: E402
 from src.services.analysis_service import (  # noqa: E402
     _validate_document_course_binding,
     analyze_course,
+    create_learning_package_task,
     get_learning_package,
 )
 from src.services.file_parser_service import extract_text  # noqa: E402
@@ -89,7 +87,6 @@ class AnalysisFlowTest(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        engine.dispose()
         TEST_DIR.cleanup()
 
     def setUp(self):
@@ -169,6 +166,34 @@ class AnalysisFlowTest(unittest.TestCase):
             verilog_document_id = session.query(Document.id).filter_by(course_id=verilog_course_id).scalar()
         self.assertIn(signal_document_id, analyzed_document_ids)
         self.assertNotIn(verilog_document_id, analyzed_document_ids)
+
+    def test_pending_task_is_reused_and_completed(self):
+        pdf_path = Path(TEST_DIR.name) / "queued.pdf"
+        self._make_pdf(pdf_path, "Queued generation content")
+        with get_db_session() as session:
+            user = User(email="queued@example.com", password_hash="test")
+            session.add(user)
+            session.flush()
+            course = Course(user_id=user.id, name="Queued course")
+            session.add(course)
+            session.flush()
+            session.add(self._document(user.id, course.id, pdf_path))
+            session.flush()
+            user_id, course_id = user.id, course.id
+
+        task = create_learning_package_task(course_id, user_id)
+        self.assertEqual(task.status, "pending")
+        result = analyze_course(
+            course_id,
+            user_id,
+            llm_client=FakeLLMClient(),
+            package_id=task.id,
+        )
+
+        self.assertEqual(result.id, task.id)
+        self.assertEqual(result.status, "completed")
+        with get_db_session() as session:
+            self.assertEqual(session.query(LearningPackage).count(), 1)
 
     def test_pdf_and_pptx_enter_analysis_flow(self):
         pdf_path = Path(TEST_DIR.name) / "formats.pdf"

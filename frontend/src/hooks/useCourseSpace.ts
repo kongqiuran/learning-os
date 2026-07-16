@@ -4,6 +4,8 @@ import { api } from '../lib/api'
 import type { AssistantQueryInput } from '../types/api'
 
 export const courseSpaceQueryKey = (courseId: string | undefined) => ['course-space', courseId] as const
+export const generationTaskQueryKey = (courseId: string | undefined, packageId: number | null) =>
+  ['generation-task', courseId, packageId] as const
 
 export function useCourseSpace(courseId: string | undefined) {
   return useQuery({
@@ -39,6 +41,18 @@ export function useGenerateLearningPackage(courseId: string | undefined) {
         queryClient.invalidateQueries({ queryKey: courseSpaceQueryKey(courseId) }),
         queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
       ])
+    },
+  })
+}
+
+export function useGenerationTask(courseId: string | undefined, packageId: number | null) {
+  return useQuery({
+    queryKey: generationTaskQueryKey(courseId, packageId),
+    queryFn: () => api.learningPackageTask(courseId!, packageId!),
+    enabled: Boolean(courseId && packageId),
+    refetchInterval: (query) => {
+      const status = query.state.data?.status
+      return status === 'pending' || status === 'processing' ? 2000 : false
     },
   })
 }

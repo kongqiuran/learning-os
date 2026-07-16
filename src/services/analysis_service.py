@@ -9,7 +9,7 @@ from src.models import Course, Document, DocumentAnalysis, LearningPackage
 from src.services.file_parser_service import extract_text, get_source_type
 
 
-def analyze_course(course_id, user_id, llm_client=None, language="zh"):
+def analyze_course(course_id, user_id, llm_client=None, language="zh", package_id=None):
     course, documents = _load_course_documents(course_id, user_id)
     if course is None:
         raise ValueError("The course does not exist or access is denied.")
@@ -17,7 +17,11 @@ def analyze_course(course_id, user_id, llm_client=None, language="zh"):
         raise ValueError("Upload at least one supported document before generating a learning package.")
     _validate_document_course_binding(course_id, documents)
 
-    package = _create_processing_package(course.id)
+    package = (
+        _start_existing_package(package_id, course.id)
+        if package_id is not None
+        else _create_package(course.id, "processing")
+    )
     try:
         analyses = [
             _get_or_create_document_analysis(document, llm_client, language)
@@ -45,6 +49,12 @@ def analyze_course(course_id, user_id, llm_client=None, language="zh"):
             stored_package = session.get(LearningPackage, package.id)
             if stored_package is not None:
                 stored_package.status = "failed"
+                stored_package.content_json = {
+                    "error": {
+                        "code": "generation_failed",
+                        "message": "Course content generation failed.",
+                    }
+                }
         raise
 
 
@@ -58,6 +68,31 @@ def get_learning_package(course_id, user_id):
             .where(Course.id == int(course_id), Course.user_id == int(user_id))
             .order_by(LearningPackage.version.desc(), LearningPackage.id.desc())
         )
+
+
+def get_learning_package_task(package_id, course_id, user_id):
+    if package_id is None or course_id is None or user_id is None:
+        return None
+    with get_db_session() as session:
+        return session.scalar(
+            select(LearningPackage)
+            .join(Course)
+            .where(
+                LearningPackage.id == int(package_id),
+                LearningPackage.course_id == int(course_id),
+                Course.user_id == int(user_id),
+            )
+        )
+
+
+def create_learning_package_task(course_id, user_id):
+    course, documents = _load_course_documents(course_id, user_id)
+    if course is None:
+        raise ValueError("The course does not exist or access is denied.")
+    if not documents:
+        raise ValueError("Upload at least one supported document before generating a learning package.")
+    _validate_document_course_binding(course_id, documents)
+    return _create_package(course.id, "pending")
 
 
 def _validate_document_course_binding(course_id, documents):
@@ -85,18 +120,35 @@ def _load_course_documents(course_id, user_id):
         return course, documents
 
 
-def _create_processing_package(course_id):
+def _create_package(course_id, status):
     with get_db_session() as session:
         latest_version = session.scalar(
             select(func.max(LearningPackage.version)).where(LearningPackage.course_id == course_id)
         )
         package = LearningPackage(
             course_id=course_id,
-            status="processing",
+            status=status,
             version=(latest_version or 0) + 1,
             content_json={},
         )
         session.add(package)
+        session.flush()
+    return package
+
+
+def _start_existing_package(package_id, course_id):
+    with get_db_session() as session:
+        package = session.scalar(
+            select(LearningPackage).where(
+                LearningPackage.id == int(package_id),
+                LearningPackage.course_id == int(course_id),
+            )
+        )
+        if package is None:
+            raise ValueError("The generation task was not found.")
+        if package.status not in {"pending", "processing"}:
+            raise ValueError("The generation task is not active.")
+        package.status = "processing"
         session.flush()
     return package
 

@@ -1,11 +1,12 @@
 import logging
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile, status
 
 from src.api.adapters.assistant_adapter import answer_course_question
 from src.api.adapters.generation_adapter import (
     GenerationInProgressError,
-    generate_course_package,
+    queue_course_package,
+    run_queued_course_package,
 )
 from src.api.adapters.upload_adapter import ServiceUploadFile
 from src.api.dependencies import require_current_user
@@ -22,7 +23,7 @@ from src.api.serializers import (
     serialize_document,
     serialize_learning_package,
 )
-from src.services.analysis_service import get_learning_package
+from src.services.analysis_service import get_learning_package, get_learning_package_task
 from src.services.course_service import get_course_for_user
 from src.services.document_service import (
     DocumentUploadError,
@@ -80,11 +81,19 @@ def delete_document(course_id: int, document_id: int, user=Depends(require_curre
     return MessageResponse(message="Document deleted successfully.")
 
 
-@router.post("/learning-package/generate", response_model=LearningPackageResponse)
-def generate_learning_package(course_id: int, user=Depends(require_current_user)):
+@router.post(
+    "/learning-package/generate",
+    response_model=LearningPackageResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def generate_learning_package(
+    course_id: int,
+    background_tasks: BackgroundTasks,
+    user=Depends(require_current_user),
+):
     _require_course(course_id, user.id)
     try:
-        package = generate_course_package(course_id, user.id)
+        package = queue_course_package(course_id, user.id)
     except GenerationInProgressError as exc:
         raise HTTPException(
             status_code=409,
@@ -95,12 +104,31 @@ def generate_learning_package(course_id: int, user=Depends(require_current_user)
             status_code=400,
             detail={"code": "generation_failed", "message": str(exc)},
         ) from exc
-    except Exception as exc:
-        logger.exception("Course content generation failed.")
+    background_tasks.add_task(
+        _run_generation_background_task,
+        package.id,
+        course_id,
+        user.id,
+    )
+    return serialize_learning_package(package)
+
+
+@router.get(
+    "/learning-package/{package_id}",
+    response_model=LearningPackageResponse,
+)
+def get_learning_package_status(
+    course_id: int,
+    package_id: int,
+    user=Depends(require_current_user),
+):
+    _require_course(course_id, user.id)
+    package = get_learning_package_task(package_id, course_id, user.id)
+    if package is None:
         raise HTTPException(
-            status_code=502,
-            detail={"code": "generation_failed", "message": "Course content generation failed."},
-        ) from exc
+            status_code=404,
+            detail={"code": "generation_task_not_found", "message": "The generation task was not found."},
+        )
     return serialize_learning_package(package)
 
 
@@ -135,3 +163,13 @@ def _require_course(course_id, user_id):
             detail={"code": "course_not_found", "message": "The course was not found."},
         )
     return course
+
+
+def _run_generation_background_task(package_id, course_id, user_id):
+    try:
+        run_queued_course_package(package_id, course_id, user_id)
+    except Exception:
+        logger.exception(
+            "Course content generation task failed.",
+            extra={"package_id": package_id, "course_id": course_id},
+        )

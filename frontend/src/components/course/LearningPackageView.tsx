@@ -27,8 +27,8 @@ export function LearningPackageView({
   generating: boolean
   onSelectSection: (section: string) => void
 }) {
-  if (generating || learningPackage?.status === 'processing') {
-    return <StatePanel variant="loading" title="正在整理课程内容" description="系统正在分析资料并生成课程学习内容，请保持此页面打开。" />
+  if (generating || learningPackage?.status === 'pending' || learningPackage?.status === 'processing') {
+    return <StatePanel variant="loading" title="正在整理课程内容" description="系统正在后台分析资料并生成课程学习内容，你可以离开此页面。" />
   }
 
   if (learningPackage?.status === 'failed') {

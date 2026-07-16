@@ -128,11 +128,12 @@ class CourseSpaceApiTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         delete.assert_called_once_with(20, self.user.id, 10)
 
-    def test_generate_and_assistant_delegate_to_adapters(self):
-        package = fake_package()
+    def test_generate_returns_accepted_task_and_assistant_delegates(self):
+        package = fake_package(status="pending")
         with (
             patch("src.api.routers.course_space.get_course_for_user", return_value=fake_course()),
-            patch("src.api.routers.course_space.generate_course_package", return_value=package) as generate,
+            patch("src.api.routers.course_space.queue_course_package", return_value=package) as queue,
+            patch("src.api.routers.course_space.run_queued_course_package") as run_task,
             patch(
                 "src.api.routers.course_space.answer_course_question",
                 return_value=AssistantAnswer("根据课程资料解释。", ["lecture.md"]),
@@ -144,10 +145,24 @@ class CourseSpaceApiTest(unittest.TestCase):
                 json={"question": "Why?", "current_section": "重点内容"},
             )
 
-        self.assertEqual(generate_response.status_code, 200)
+        self.assertEqual(generate_response.status_code, 202)
+        self.assertEqual(generate_response.json()["status"], "pending")
         self.assertEqual(assistant_response.status_code, 200)
-        generate.assert_called_once_with(10, self.user.id)
+        queue.assert_called_once_with(10, self.user.id)
+        run_task.assert_called_once_with(30, 10, self.user.id)
         answer.assert_called_once_with(10, self.user.id, "Why?", "重点内容")
+
+    def test_generation_task_status_is_scoped_to_course_owner(self):
+        package = fake_package(status="processing")
+        with (
+            patch("src.api.routers.course_space.get_course_for_user", return_value=fake_course()),
+            patch("src.api.routers.course_space.get_learning_package_task", return_value=package) as get_task,
+        ):
+            response = self.client.get("/api/courses/10/learning-package/30")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], "processing")
+        get_task.assert_called_once_with(30, 10, self.user.id)
 
     def test_other_users_course_is_hidden_from_every_course_space_action(self):
         requests = [

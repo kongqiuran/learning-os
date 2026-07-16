@@ -1,5 +1,5 @@
 import { ArrowLeft, CalendarDays, FileText } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
 import { CourseAssistant } from '../components/course/CourseAssistant'
@@ -9,7 +9,7 @@ import { LearningPackageView } from '../components/course/LearningPackageView'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { StatePanel } from '../components/ui/StatePanel'
-import { useCourseSpace, useGenerateLearningPackage } from '../hooks/useCourseSpace'
+import { useCourseSpace, useGenerateLearningPackage, useGenerationTask } from '../hooks/useCourseSpace'
 import { ApiError } from '../lib/api'
 
 export function CourseSpacePage() {
@@ -18,6 +18,28 @@ export function CourseSpacePage() {
   const courseSpace = useCourseSpace(courseId)
   const generation = useGenerateLearningPackage(courseId)
   const [currentSection, setCurrentSection] = useState('')
+  const [generationTaskId, setGenerationTaskId] = useState<number | null>(null)
+  const generationTask = useGenerationTask(courseId, generationTaskId)
+  const refetchCourseSpace = courseSpace.refetch
+
+  useEffect(() => {
+    const latestPackage = courseSpace.data?.learning_package
+    if (
+      generationTaskId === null &&
+      latestPackage &&
+      (latestPackage.status === 'pending' || latestPackage.status === 'processing')
+    ) {
+      setGenerationTaskId(latestPackage.id)
+    }
+  }, [courseSpace.data?.learning_package, generationTaskId])
+
+  useEffect(() => {
+    const status = generationTask.data?.status
+    if (status === 'completed' || status === 'failed') {
+      void refetchCourseSpace()
+      setGenerationTaskId(null)
+    }
+  }, [generationTask.data?.status, refetchCourseSpace])
 
   if (courseSpace.isPending) {
     return <StatePanel variant="loading" title="正在打开课程学习空间" />
@@ -35,6 +57,10 @@ export function CourseSpacePage() {
   }
 
   const { course, documents, learning_package: learningPackage } = courseSpace.data
+  const displayedLearningPackage = generationTask.data ?? learningPackage
+  const isGenerating = generation.isPending ||
+    displayedLearningPackage?.status === 'pending' ||
+    displayedLearningPackage?.status === 'processing'
 
   function selectSection(section: string) {
     setCurrentSection(section)
@@ -58,7 +84,7 @@ export function CourseSpacePage() {
         </div>
       </Card>
 
-      {generation.isError ? (
+      {generation.isError || generationTask.isError ? (
         <div className="mt-4 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-700">
           {generation.error instanceof ApiError ? generation.error.message : '课程内容整理失败，请稍后重试。'}
         </div>
@@ -68,9 +94,9 @@ export function CourseSpacePage() {
         <CourseNavigation
           courseName={course.name}
           documentCount={documents.length}
-          learningPackage={learningPackage}
-          generating={generation.isPending}
-          onGenerate={() => generation.mutate()}
+          learningPackage={displayedLearningPackage}
+          generating={isGenerating}
+          onGenerate={() => generation.mutate(undefined, { onSuccess: (task) => setGenerationTaskId(task.id) })}
           onOpenKnowledge={() => navigate(`/courses/${courseId}/knowledge`)}
         />
 
@@ -81,7 +107,7 @@ export function CourseSpacePage() {
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-blue-600">Learning content</p>
               <h2 className="mt-1 text-xl font-semibold text-slate-950">课程学习内容</h2>
             </div>
-            <LearningPackageView learningPackage={learningPackage} generating={generation.isPending} onSelectSection={selectSection} />
+            <LearningPackageView learningPackage={displayedLearningPackage} generating={isGenerating} onSelectSection={selectSection} />
           </section>
         </main>
 

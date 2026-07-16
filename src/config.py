@@ -6,10 +6,21 @@ from dotenv import load_dotenv
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-DATA_DIR = BASE_DIR / "data"
+ENV_FILE = BASE_DIR / ".env"
+load_dotenv(ENV_FILE, override=False)
+
+
+def _resolve_data_dir():
+    configured_path = os.getenv("LEARNING_OS_DATA_DIR", "").strip()
+    if not configured_path:
+        return BASE_DIR / "data"
+    path = Path(configured_path)
+    return path if path.is_absolute() else (BASE_DIR / path).resolve()
+
+
+DATA_DIR = _resolve_data_dir()
 OUTPUT_DIR = DATA_DIR / "outputs"
 UPLOAD_DIR = DATA_DIR / "uploads"
-ENV_FILE = BASE_DIR / ".env"
 DEFAULT_DATABASE_PATH = DATA_DIR / "database" / "learning_os.db"
 
 
@@ -22,7 +33,7 @@ class LLMConfig:
 
 
 def get_llm_config():
-    load_dotenv(ENV_FILE, override=True)
+    load_dotenv(ENV_FILE, override=False)
     return LLMConfig(
         provider=os.getenv("LLM_PROVIDER", "deepseek").strip(),
         api_key=os.getenv("LLM_API_KEY", "").strip(),
@@ -32,7 +43,7 @@ def get_llm_config():
 
 
 def get_max_chars_per_request():
-    load_dotenv(ENV_FILE, override=True)
+    load_dotenv(ENV_FILE, override=False)
     try:
         return int(os.getenv("MAX_CHARS_PER_REQUEST", "60000"))
     except ValueError:
@@ -40,7 +51,7 @@ def get_max_chars_per_request():
 
 
 def get_assistant_max_context_chars():
-    load_dotenv(ENV_FILE, override=True)
+    load_dotenv(ENV_FILE, override=False)
     try:
         configured_limit = int(os.getenv("ASSISTANT_MAX_CONTEXT_CHARS", "16000"))
     except ValueError:
@@ -49,26 +60,44 @@ def get_assistant_max_context_chars():
 
 
 def get_database_url():
-    load_dotenv(ENV_FILE, override=True)
+    load_dotenv(ENV_FILE, override=False)
     configured_url = os.getenv("DATABASE_URL", "").strip()
     if not configured_url:
-        return f"sqlite:///{DEFAULT_DATABASE_PATH.as_posix()}"
+        database_url = f"sqlite:///{DEFAULT_DATABASE_PATH.as_posix()}"
+        _ensure_safe_test_database(database_url)
+        return database_url
 
     sqlite_prefix = "sqlite:///"
     if not configured_url.startswith(sqlite_prefix):
+        _ensure_safe_test_database(configured_url)
         return configured_url
 
     database_path = configured_url.removeprefix(sqlite_prefix)
     if database_path == ":memory:" or Path(database_path).is_absolute():
+        _ensure_safe_test_database(configured_url)
         return configured_url
 
-    return f"sqlite:///{(BASE_DIR / database_path).resolve().as_posix()}"
+    database_url = f"sqlite:///{(BASE_DIR / database_path).resolve().as_posix()}"
+    _ensure_safe_test_database(database_url)
+    return database_url
 
 
 def get_max_upload_size():
-    load_dotenv(ENV_FILE, override=True)
+    load_dotenv(ENV_FILE, override=False)
     try:
         size_mb = int(os.getenv("MAX_UPLOAD_SIZE_MB", "50"))
     except ValueError:
         size_mb = 50
     return max(1, size_mb) * 1024 * 1024
+
+
+def _ensure_safe_test_database(database_url):
+    if os.getenv("LEARNING_OS_TESTING", "").strip().lower() not in {"1", "true", "yes", "on"}:
+        return
+    if not database_url.startswith("sqlite:///") or database_url == "sqlite:///:memory:":
+        return
+    configured_path = Path(database_url.removeprefix("sqlite:///"))
+    resolved_path = configured_path if configured_path.is_absolute() else (BASE_DIR / configured_path).resolve()
+    production_path = (BASE_DIR / "data" / "database" / "learning_os.db").resolve()
+    if resolved_path.resolve() == production_path:
+        raise RuntimeError("Tests cannot use the production Learning OS database.")

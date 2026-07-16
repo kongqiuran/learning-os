@@ -40,6 +40,7 @@ const localizedMessages: Record<string, string> = {
   document_not_found: '资料不存在或你没有操作权限。',
   generation_in_progress: '课程内容正在整理，请稍候。',
   generation_failed: '课程内容整理失败，请检查模型配置后重试。',
+  generation_task_not_found: '课程整理任务不存在或已经失效。',
   assistant_unavailable: '课程助手暂时无法回答，请稍后重试。',
   knowledge_not_found: '知识内容不存在或你没有访问权限。',
 }
@@ -99,6 +100,8 @@ export const api = {
     request<{ message: string }>(`/api/courses/${courseId}/documents/${documentId}`, { method: 'DELETE' }),
   generateLearningPackage: (courseId: number | string) =>
     request<LearningPackage>(`/api/courses/${courseId}/learning-package/generate`, { method: 'POST' }),
+  learningPackageTask: (courseId: number | string, packageId: number) =>
+    request<LearningPackage>(`/api/courses/${courseId}/learning-package/${packageId}`),
   queryCourseAssistant: (courseId: number | string, input: AssistantQueryInput) =>
     request<AssistantQueryResponse>(`/api/courses/${courseId}/assistant/query`, {
       method: 'POST',

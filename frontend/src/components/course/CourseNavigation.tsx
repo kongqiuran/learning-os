@@ -67,6 +67,7 @@ function NavigationButton({ icon: Icon, label, target }: { icon: typeof FileText
 }
 
 function getCourseStatus(documentCount: number, learningPackage: LearningPackage | null, generating: boolean) {
+  if (learningPackage?.status === 'pending') return { label: '正在整理', className: 'bg-blue-50 text-blue-700' }
   if (generating || learningPackage?.status === 'processing') return { label: '正在整理', className: 'bg-blue-50 text-blue-700' }
   if (learningPackage?.status === 'completed') return { label: '学习内容已就绪', className: 'bg-green-50 text-green-700' }
   if (learningPackage?.status === 'failed') return { label: '上次整理失败', className: 'bg-orange-50 text-orange-700' }

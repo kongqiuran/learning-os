@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 from threading import Lock
 
 from src.services.analysis_service import analyze_course, get_learning_package
+from src.services.analysis_service import create_learning_package_task
 
 
 class GenerationInProgressError(RuntimeError):
@@ -27,6 +28,32 @@ def generate_course_package(course_id, user_id):
         _release_course(course_id)
 
 
+def queue_course_package(course_id, user_id):
+    if not _claim_course(course_id):
+        raise GenerationInProgressError("Course content generation is already in progress.")
+
+    try:
+        latest_package = get_learning_package(course_id, user_id)
+        if _is_recent_processing_package(latest_package):
+            raise GenerationInProgressError("Course content generation is already in progress.")
+        return create_learning_package_task(course_id, user_id)
+    except Exception:
+        _release_course(course_id)
+        raise
+
+
+def run_queued_course_package(package_id, course_id, user_id):
+    try:
+        return analyze_course(
+            course_id,
+            user_id,
+            language="zh",
+            package_id=package_id,
+        )
+    finally:
+        _release_course(course_id)
+
+
 def _claim_course(course_id):
     with _registry_lock:
         if course_id in _active_course_ids:
@@ -41,7 +68,7 @@ def _release_course(course_id):
 
 
 def _is_recent_processing_package(package):
-    if package is None or package.status != "processing":
+    if package is None or package.status not in {"pending", "processing"}:
         return False
     created_at = package.created_at
     if created_at.tzinfo is None:

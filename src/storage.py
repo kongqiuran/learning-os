@@ -15,7 +15,11 @@ def save_document_bytes(user_id, course_id, extension, data):
     file_path, stored_filename = build_document_path(user_id, course_id, extension)
     file_path.parent.mkdir(parents=True, exist_ok=True)
     file_path.write_bytes(data)
-    return file_path.relative_to(BASE_DIR).as_posix(), stored_filename
+    try:
+        stored_path = file_path.relative_to(BASE_DIR)
+    except ValueError:
+        stored_path = file_path.resolve()
+    return stored_path.as_posix(), stored_filename
 
 
 def delete_document_file(relative_path):
