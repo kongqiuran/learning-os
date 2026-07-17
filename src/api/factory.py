@@ -16,6 +16,11 @@ DEFAULT_SESSION_SECRET = "learning-os-local-development-secret"
 
 def create_app(session_secret=None):
     load_dotenv(BASE_DIR / ".env", override=False)
+    selected_session_secret = session_secret or os.getenv(
+        "API_SESSION_SECRET",
+        DEFAULT_SESSION_SECRET,
+    )
+    _validate_production_session_secret(selected_session_secret)
 
     app = FastAPI(
         title="Learning OS API",
@@ -33,7 +38,7 @@ def create_app(session_secret=None):
     )
     app.add_middleware(
         SessionMiddleware,
-        secret_key=session_secret or os.getenv("API_SESSION_SECRET", DEFAULT_SESSION_SECRET),
+        secret_key=selected_session_secret,
         session_cookie="learning_os_session",
         max_age=60 * 60 * 24 * 7,
         same_site="lax",
@@ -59,3 +64,13 @@ def _get_boolean_setting(name, default):
     if value is None:
         return default
     return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _validate_production_session_secret(session_secret):
+    if os.getenv("APP_ENV", "").strip().lower() != "production":
+        return
+    insecure_values = {"", "secret", DEFAULT_SESSION_SECRET}
+    if session_secret.strip() in insecure_values or len(session_secret.strip()) < 32:
+        raise RuntimeError(
+            "API_SESSION_SECRET must contain at least 32 non-default characters in production."
+        )
