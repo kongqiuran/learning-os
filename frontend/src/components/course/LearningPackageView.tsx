@@ -27,11 +27,9 @@ export function LearningPackageView({
   generating: boolean
   onSelectSection: (section: string) => void
 }) {
-  if (generating || learningPackage?.status === 'pending' || learningPackage?.status === 'processing') {
-    return <StatePanel variant="loading" title="正在整理课程内容" description="系统正在后台分析资料并生成课程学习内容，你可以离开此页面。" />
-  }
+  const isLoading = generating || learningPackage?.status === 'pending' || learningPackage?.status === 'processing'
 
-  if (learningPackage?.status === 'failed') {
+  if (!isLoading && learningPackage?.status === 'failed') {
     const diagnostics = [
       learningPackage.current_stage ? `阶段：${learningPackage.current_stage}` : null,
       learningPackage.error_type ? `原因：${learningPackage.error_type}` : null,
@@ -40,36 +38,43 @@ export function LearningPackageView({
     return <StatePanel variant="error" title="上次整理没有完成" description={`${diagnostics}。请从左侧重新整理课程内容。`} />
   }
 
-  if (!learningPackage || learningPackage.status !== 'completed') {
-    return <StatePanel variant="empty" title="课程内容尚未整理" description="上传资料后，使用“整理课程内容”生成属于这门课程的学习内容。" />
-  }
-
-  const sections = sectionOrder
-    .filter((key) => hasContent(learningPackage.content[key]))
-    .map((key) => [key, learningPackage.content[key]] as const)
-
-  if (sections.length === 0) {
-    return <StatePanel variant="empty" title="学习包暂时没有可展示内容" description="可以重新整理课程内容，或检查当前资料是否包含有效文本。" />
-  }
+  const completedPackage = learningPackage?.status === 'completed' ? learningPackage : null
+  const sections = completedPackage
+    ? sectionOrder
+        .filter((key) => hasContent(completedPackage.content[key]))
+        .map((key) => [key, completedPackage.content[key]] as const)
+    : []
 
   return (
     <div className="space-y-4">
-      <Card className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <div className="flex items-center gap-2 text-green-700"><BookOpenText className="size-4" /><span className="text-sm font-semibold">课程内容已就绪</span></div>
-          <p className="mt-1 text-xs text-slate-500">版本 {learningPackage.version} · 生成于 {formatDateTime(learningPackage.created_at)}</p>
-        </div>
-        <span className="inline-flex items-center gap-2 rounded-xl bg-violet-50 px-3 py-2 text-xs font-medium text-violet-700"><Sparkles className="size-3.5" /> 基于当前课程资料</span>
-      </Card>
-      {sections.map(([key, value]) => (
-        <Card key={key} className="p-5 sm:p-6">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
-            <h3 className="text-lg font-semibold text-slate-950">{sectionLabels[key]}</h3>
-            <button type="button" className="text-xs font-medium text-violet-700 hover:text-violet-800" onClick={() => onSelectSection(sectionLabels[key])}>以此部分提问</button>
-          </div>
-          <div className="mt-5"><ContentValue value={value} /></div>
-        </Card>
-      ))}
+      {isLoading ? (
+        <StatePanel variant="loading" title="正在整理课程内容" description="系统正在后台分析资料并生成课程学习内容，你可以离开此页面。" />
+      ) : completedPackage ? (
+        sections.length > 0 ? (
+          <>
+            <Card className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <div className="flex items-center gap-2 text-green-700"><BookOpenText className="size-4" /><span className="text-sm font-semibold">课程内容已就绪</span></div>
+                <p className="mt-1 text-xs text-slate-500">版本 {completedPackage.version} · 生成于 {formatDateTime(completedPackage.created_at)}</p>
+              </div>
+              <span className="inline-flex items-center gap-2 rounded-xl bg-violet-50 px-3 py-2 text-xs font-medium text-violet-700"><Sparkles className="size-3.5" /> 基于当前课程资料</span>
+            </Card>
+            {sections.map(([key, value]) => (
+              <Card key={key} className="p-5 sm:p-6">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
+                  <h3 className="text-lg font-semibold text-slate-950">{sectionLabels[key]}</h3>
+                  <button type="button" className="text-xs font-medium text-violet-700 hover:text-violet-800" onClick={() => onSelectSection(sectionLabels[key])}>以此部分提问</button>
+                </div>
+                <div className="mt-5"><ContentValue value={value} /></div>
+              </Card>
+            ))}
+          </>
+        ) : (
+          <StatePanel variant="empty" title="学习包暂时没有可展示内容" description="可以重新整理课程内容，或检查当前资料是否包含有效文本。" />
+        )
+      ) : (
+        <StatePanel variant="empty" title="课程内容尚未整理" description="上传资料后，使用“整理课程内容”生成属于这门课程的学习内容。" />
+      )}
     </div>
   )
 }
