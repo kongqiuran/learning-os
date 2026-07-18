@@ -32,7 +32,7 @@
       git pull origin main
       ```
 
-   3. 根据本次修改范围，只构建并重启对应服务，不要默认执行会同时重建全部服务的 `docker compose build`。
+   3. 根据本次修改范围选择部署命令：确定只改前端时只构建并重启前端，确定只改后端时只构建并重启后端。不要在影响范围明确时默认重新构建全部服务。
 
       前端改动：
 
@@ -50,7 +50,21 @@
       docker compose up -d backend
       ```
 
-      如果前后端都有改动，分别构建并重启两个服务。
+      如果前后端都有改动，构建并重启两个服务：
+
+      ```bash
+      cd ~/learning-os
+      docker compose build frontend backend
+      docker compose up -d frontend backend
+      ```
+
+      如果无法确定本次改动影响前端还是后端，为避免遗漏，应重新构建并重启全部服务：
+
+      ```bash
+      cd ~/learning-os
+      docker compose build
+      docker compose up -d
+      ```
 
    4. 查看容器状态：
 
