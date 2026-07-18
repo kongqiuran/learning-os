@@ -10,7 +10,7 @@
 
 4. 向用户提供需要在项目中执行的命令代码块时，代码块第一行必须包含切换到项目目录的完整命令：`cd "D:\kongqiuran\ai\learning-os"`，后续再列出实际执行命令，确保代码块可以直接复制运行。
 
-5. 提供本地 `git push` 命令后，必须继续提供完整的“推送后服务器部署”复制区。严格保留以下 1—8 的编号和顺序，不得合并或省略步骤；某一步不需要执行时，也要保留编号并明确说明无需执行。每条命令使用独立代码块，方便用户逐块复制。
+5. 提供本地 `git push` 命令后，必须继续提供完整的“推送后服务器部署”复制区。严格保留以下 1—8 的编号和顺序，不得合并或省略步骤；某一步不需要执行时，也要保留编号并明确说明无需执行。每条命令使用独立代码块，方便用户逐块复制。服务器项目目录只在第 2 步进入一次，第 3—7 步的命令块不要重复添加 `cd ~/learning-os`。
 
    1. SSH 进入服务器：
 
@@ -27,14 +27,12 @@
    3. 检查并拉取最新代码：
 
       ```bash
-      cd ~/learning-os
       git status
       ```
 
       如果显示 `Your branch is up to date with 'origin/main'`，说明服务器代码已经同步；否则继续拉取：
 
       ```bash
-      cd ~/learning-os
       git pull origin main
       ```
 
@@ -43,28 +41,24 @@
       前端改动：
 
       ```bash
-      cd ~/learning-os
       docker compose build frontend
       ```
 
       后端改动：
 
       ```bash
-      cd ~/learning-os
       docker compose build backend
       ```
 
       如果前后端都有改动，构建两个服务：
 
       ```bash
-      cd ~/learning-os
       docker compose build frontend backend
       ```
 
       如果无法确定本次改动影响前端还是后端，为避免遗漏，应重新构建全部服务：
 
       ```bash
-      cd ~/learning-os
       docker compose build
       ```
 
@@ -75,28 +69,24 @@
       前端改动：
 
       ```bash
-      cd ~/learning-os
       docker compose up -d frontend
       ```
 
       后端改动：
 
       ```bash
-      cd ~/learning-os
       docker compose up -d backend
       ```
 
       前后端都有改动：
 
       ```bash
-      cd ~/learning-os
       docker compose up -d frontend backend
       ```
 
       无法确定影响范围：
 
       ```bash
-      cd ~/learning-os
       docker compose up -d
       ```
 
@@ -105,7 +95,6 @@
    6. 查看容器状态：
 
       ```bash
-      cd ~/learning-os
       docker compose ps
       ```
 
@@ -116,14 +105,12 @@
       前端：
 
       ```bash
-      cd ~/learning-os
       docker compose logs frontend --tail=50
       ```
 
       后端：
 
       ```bash
-      cd ~/learning-os
       docker compose logs backend --tail=50
       ```
 
@@ -132,7 +119,6 @@
       如果无法确定影响范围，查看全部服务日志：
 
       ```bash
-      cd ~/learning-os
       docker compose logs --tail=50
       ```
 
