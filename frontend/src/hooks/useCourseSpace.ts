@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api } from '../lib/api'
@@ -46,15 +47,33 @@ export function useGenerateLearningPackage(courseId: string | undefined) {
 }
 
 export function useGenerationTask(courseId: string | undefined, packageId: number | null) {
-  return useQuery({
+  const queryClient = useQueryClient()
+  const generationTask = useQuery({
     queryKey: generationTaskQueryKey(courseId, packageId),
     queryFn: () => api.learningPackageTask(courseId!, packageId!),
     enabled: Boolean(courseId && packageId),
     refetchInterval: (query) => {
       const status = query.state.data?.status
-      return status === 'pending' || status === 'processing' ? 2000 : false
+      if (status === 'pending') {
+        return 3000
+      }
+
+      if (status === 'processing') {
+        return 5000
+      }
+
+      return false
     },
   })
+
+  useEffect(() => {
+    const status = generationTask.data?.status
+    if (status === 'completed' || status === 'failed') {
+      void queryClient.invalidateQueries({ queryKey: courseSpaceQueryKey(courseId) })
+    }
+  }, [courseId, generationTask.data?.status, queryClient])
+
+  return generationTask
 }
 
 export function useCourseAssistant(courseId: string | undefined) {
