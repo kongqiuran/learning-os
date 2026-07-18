@@ -37,7 +37,6 @@ export function CourseSpacePage() {
     const status = generationTask.data?.status
     if (status === 'completed' || status === 'failed') {
       void refetchCourseSpace()
-      setGenerationTaskId(null)
     }
   }, [generationTask.data?.status, refetchCourseSpace])
 
@@ -57,7 +56,9 @@ export function CourseSpacePage() {
   }
 
   const { course, documents, learning_package: learningPackage } = courseSpace.data
-  const displayedLearningPackage = generationTask.data ?? learningPackage
+  const displayedLearningPackage = generationTask.data?.status === 'completed'
+    ? generationTask.data
+    : learningPackage
   const isGenerating = generation.isPending ||
     displayedLearningPackage?.status === 'pending' ||
     displayedLearningPackage?.status === 'processing'
