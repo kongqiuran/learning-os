@@ -2,7 +2,7 @@ import { Upload, X } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 
 import { useUploadDocument } from '../../hooks/useCourseSpace'
-import { ApiError } from '../../lib/api'
+import { ApiError, type UploadProgress } from '../../lib/api'
 import { Button } from '../ui/Button'
 import { UPLOAD_CATEGORIES, type DocumentType } from './uploadCategories'
 
@@ -23,11 +23,13 @@ export function UploadDocumentDialog({
 }) {
   const [file, setFile] = useState<File | null>(null)
   const [documentType, setDocumentType] = useState<DocumentType>(initialDocumentType)
+  const [progress, setProgress] = useState<UploadProgress | null>(null)
   const upload = useUploadDocument(courseId)
 
   useEffect(() => {
     if (!open) return
     setDocumentType(initialDocumentType)
+    setProgress(null)
     function closeOnEscape(event: KeyboardEvent) {
       if (event.key === 'Escape' && !upload.isPending) onClose()
     }
@@ -41,7 +43,7 @@ export function UploadDocumentDialog({
     event.preventDefault()
     if (!file) return
     upload.mutate(
-      { file, documentType, chapterId },
+      { file, documentType, chapterId, onProgress: setProgress },
       {
         onSuccess: () => {
           setFile(null)
@@ -103,10 +105,21 @@ export function UploadDocumentDialog({
               ))}
             </div>
           </fieldset>
+          {upload.isPending && progress ? (
+            <div className="rounded-xl bg-blue-50 px-3 py-3" role="status" aria-live="polite">
+              <div className="flex items-center justify-between text-sm font-medium text-blue-800">
+                <span>{progress.phase === 'saving' ? '服务器保存中' : '正在上传'}</span>
+                <span>{progress.percent}%</span>
+              </div>
+              <div className="mt-2 h-2 overflow-hidden rounded-full bg-blue-100">
+                <div className="h-full rounded-full bg-blue-600 transition-[width] duration-200" style={{ width: `${progress.percent}%` }} />
+              </div>
+            </div>
+          ) : null}
           {upload.isError ? <p className="rounded-xl bg-orange-50 px-3 py-2.5 text-sm text-orange-700">{upload.error instanceof ApiError ? upload.error.message : '资料上传失败，请稍后重试。'}</p> : null}
           <div className="flex justify-end gap-3 pt-2">
             <Button variant="secondary" onClick={onClose} disabled={upload.isPending}>取消</Button>
-            <Button type="submit" disabled={!file || upload.isPending}>{upload.isPending ? '正在上传' : '上传资料'}</Button>
+            <Button type="submit" disabled={!file || upload.isPending}>{upload.isPending ? (progress?.phase === 'saving' ? '服务器保存中' : `正在上传 ${progress?.percent ?? 0}%`) : '上传资料'}</Button>
           </div>
         </form>
       </section>

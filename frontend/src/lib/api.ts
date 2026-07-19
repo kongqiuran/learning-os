@@ -75,6 +75,53 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return response.json() as Promise<T>
 }
 
+export interface UploadProgress {
+  phase: 'uploading' | 'saving'
+  percent: number
+}
+
+function uploadRequest<T>(path: string, body: FormData, onProgress?: (progress: UploadProgress) => void): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('POST', path)
+    xhr.withCredentials = true
+
+    xhr.upload.addEventListener('progress', (event) => {
+      if (!event.lengthComputable) return
+      const percent = Math.min(99, Math.round((event.loaded / event.total) * 100))
+      onProgress?.({ phase: 'uploading', percent })
+    })
+    xhr.upload.addEventListener('load', () => onProgress?.({ phase: 'saving', percent: 100 }))
+
+    xhr.addEventListener('load', () => {
+      const payload = parseJsonResponse<T | ApiErrorPayload>(xhr.responseText)
+      if (xhr.status >= 200 && xhr.status < 300 && payload) {
+        resolve(payload as T)
+        return
+      }
+      const errorPayload = payload as ApiErrorPayload | null
+      reject(new ApiError(
+        xhr.status,
+        errorPayload?.error.code ?? 'request_failed',
+        localizedMessages[errorPayload?.error.code ?? ''] ?? errorPayload?.error.message ?? '请求失败，请稍后重试。',
+      ))
+    })
+    xhr.addEventListener('error', () => reject(new ApiError(0, 'network_error', '网络连接失败，请稍后重试。')))
+    xhr.addEventListener('abort', () => reject(new ApiError(0, 'request_aborted', '上传已取消。')))
+
+    onProgress?.({ phase: 'uploading', percent: 0 })
+    xhr.send(body)
+  })
+}
+
+function parseJsonResponse<T>(responseText: string): T | null {
+  try {
+    return JSON.parse(responseText) as T
+  } catch {
+    return null
+  }
+}
+
 export const api = {
   currentUser: () => request<AuthResponse>('/api/auth/me'),
   login: (email: string, password: string) =>
@@ -113,12 +160,12 @@ export const api = {
     request<{ message: string }>(`/api/courses/${courseId}`, { method: 'DELETE' }),
   courseSpace: (courseId: number | string) =>
     request<CourseSpaceResponse>(`/api/courses/${courseId}/space`),
-  uploadDocument: (courseId: number | string, file: File, documentType: string, chapterId?: number | null) => {
+  uploadDocument: (courseId: number | string, file: File, documentType: string, chapterId?: number | null, onProgress?: (progress: UploadProgress) => void) => {
     const body = new FormData()
     body.append('file', file)
     body.append('document_type', documentType)
     if (chapterId != null) body.append('chapter_id', String(chapterId))
-    return request<DocumentSummary>(`/api/courses/${courseId}/documents`, { method: 'POST', body })
+    return uploadRequest<DocumentSummary>(`/api/courses/${courseId}/documents`, body, onProgress)
   },
   deleteDocument: (courseId: number | string, documentId: number) =>
     request<{ message: string }>(`/api/courses/${courseId}/documents/${documentId}`, { method: 'DELETE' }),

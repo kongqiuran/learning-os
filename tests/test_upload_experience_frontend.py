@@ -38,12 +38,25 @@ class UploadExperienceFrontendContractTest(unittest.TestCase):
         ).read_text(encoding="utf-8")
         api = (FRONTEND_SOURCE / "lib" / "api.ts").read_text(encoding="utf-8")
 
-        self.assertIn("{ file, documentType, chapterId }", dialog)
+        self.assertIn("{ file, documentType, chapterId, onProgress: setProgress }", dialog)
         self.assertIn("allowedDocumentTypes.includes", dialog)
         self.assertIn("setDocumentType(category.type)", dialog)
         self.assertNotIn("<select", dialog)
         self.assertIn("body.append('document_type', documentType)", api)
         self.assertIn("/documents", api)
+
+    def test_upload_reports_progress_and_separates_server_saving(self):
+        dialog = (
+            FRONTEND_SOURCE / "components" / "course" / "UploadDocumentDialog.tsx"
+        ).read_text(encoding="utf-8")
+        api = (FRONTEND_SOURCE / "lib" / "api.ts").read_text(encoding="utf-8")
+        nginx = (PROJECT_ROOT / "nginx.conf").read_text(encoding="utf-8")
+
+        self.assertIn("new XMLHttpRequest()", api)
+        self.assertIn("xhr.upload.addEventListener('progress'", api)
+        self.assertIn("progress.percent", dialog)
+        self.assertIn("服务器保存中", dialog)
+        self.assertIn("proxy_request_buffering off;", nginx)
 
 
 if __name__ == "__main__":

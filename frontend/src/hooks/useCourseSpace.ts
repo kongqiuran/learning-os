@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
-import { api } from '../lib/api'
+import { api, type UploadProgress } from '../lib/api'
 import type { AssistantQueryInput, CourseSpaceResponse } from '../types/api'
 
 export const courseSpaceQueryKey = (courseId: string | undefined) => ['course-space', courseId] as const
@@ -19,8 +19,8 @@ export function useCourseSpace(courseId: string | undefined) {
 export function useUploadDocument(courseId: string | undefined) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ file, documentType, chapterId }: { file: File; documentType: string; chapterId?: number | null }) =>
-      api.uploadDocument(courseId!, file, documentType, chapterId),
+    mutationFn: ({ file, documentType, chapterId, onProgress }: { file: File; documentType: string; chapterId?: number | null; onProgress?: (progress: UploadProgress) => void }) =>
+      api.uploadDocument(courseId!, file, documentType, chapterId, onProgress),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: courseSpaceQueryKey(courseId) }),
   })
 }
