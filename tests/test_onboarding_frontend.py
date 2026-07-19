@@ -14,6 +14,8 @@ class OnboardingFrontendContractTest(unittest.TestCase):
         ).read_text(encoding="utf-8")
 
         self.assertIn("dashboard.data.course_count === 0", dashboard)
+        self.assertIn("isNewAccount(currentUser.data.user.created_at)", dashboard)
+        self.assertIn("7 * 24 * 60 * 60 * 1000", dashboard)
         self.assertIn("欢迎使用 Learning OS", guide)
         self.assertIn("关闭首次使用引导", guide)
         self.assertIn("learning-os:onboarding-dismissed:${userId}", guide)

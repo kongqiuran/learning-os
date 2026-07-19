@@ -8,7 +8,7 @@
 2. AI 整理知识；
 3. 开始学习。
 
-欢迎卡提供“创建第一门课程”主动作和关闭按钮。关闭状态按 user_id 保存在浏览器本地，不会影响其他账号；已有课程的老用户不显示该引导。
+欢迎卡提供“创建第一门课程”主动作和关闭按钮。关闭状态按 user_id 保存在浏览器本地，不会影响其他账号；只有注册 7 天内且课程数为 0 的账号显示，已有课程或注册超过 7 天的老用户不显示该引导。
 
 课程流程的空状态同时增强：
 
@@ -21,7 +21,7 @@
 - `frontend/src/components/domain/WelcomeGuide.tsx`
   - 欢迎文案、三步路径、关闭状态和创建课程动作。
 - `frontend/src/pages/DashboardPage.tsx`
-  - 只在 course_count 为 0 时接入引导。
+  - 只在注册 7 天内且 course_count 为 0 时接入引导。
 - `frontend/src/components/course/LearningPackageView.tsx`
   - 根据是否已有资料展示可执行的学习内容空状态。
 - `frontend/src/pages/CourseSpacePage.tsx`
@@ -35,7 +35,7 @@
 - 不修改登录、Session、隐私授权或生成状态机；
 - 不自动创建课程、不自动上传、不自动触发付费模型调用；
 - 引导关闭不影响核心功能；
-- 已有课程用户不显示欢迎卡；
+- 已有课程用户和注册超过 7 天的老用户不显示欢迎卡；
 - 同一浏览器不同账号使用独立关闭 key。
 
 ## 4. 测试范围

@@ -52,7 +52,7 @@ export function DashboardPage() {
         </div>
       ) : (
         <>
-          {dashboard.data.course_count === 0 && currentUser.data ? (
+          {dashboard.data.course_count === 0 && currentUser.data && isNewAccount(currentUser.data.user.created_at) ? (
             <WelcomeGuide userId={currentUser.data.user.id} onCreateCourse={openCreateDialog} />
           ) : null}
           <div className="mt-8 grid gap-4 sm:grid-cols-2">
@@ -103,6 +103,11 @@ export function DashboardPage() {
       <CreateCourseDialog open={createOpen} onClose={closeCreateDialog} />
     </section>
   )
+}
+
+function isNewAccount(createdAt: string) {
+  const accountAge = Date.now() - new Date(createdAt).getTime()
+  return accountAge >= 0 && accountAge <= 7 * 24 * 60 * 60 * 1000
 }
 
 function MetricCard({ icon: Icon, label, value, help }: { icon: typeof BookOpen; label: string; value: number; help: string }) {
