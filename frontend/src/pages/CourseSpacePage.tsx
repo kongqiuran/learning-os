@@ -31,6 +31,7 @@ import type { Chapter, DocumentSummary, LearningPackage } from '../types/api'
 
 type Scene = 'follow' | 'textbook' | 'exam'
 type ChapterEditor = { mode: 'create' } | { mode: 'rename'; chapter: Chapter }
+type GenerationScope = { documentId?: number; chapterId?: number; unassigned?: boolean }
 
 const sceneInfo = {
   follow: { label: '跟课资料', description: '按课程进度管理课件、练习和补充资料。', sections: ['chapter_summary', 'key_points'] },
@@ -59,7 +60,8 @@ export function CourseSpacePage({ scene }: { scene: Scene }) {
   const [taskId, setTaskId] = useState<number | null>(null)
   const task = useGenerationTask(courseId, taskId)
   const legacyPackage = courseSpace.data?.learning_package?.scene === 'legacy' ? courseSpace.data.learning_package : null
-  const scenePackage = courseSpace.data?.scene_packages?.[scene] ?? legacyPackage
+  const unscopedScenePackage = courseSpace.data?.scene_packages?.[scene] ?? legacyPackage
+  const unscopedCompletedPackage = courseSpace.data?.scene_completed_packages?.[scene] ?? (legacyPackage?.status === 'completed' ? legacyPackage : null)
 
   useEffect(() => {
     if (currentUser.data && courseId) {
@@ -86,10 +88,10 @@ export function CourseSpacePage({ scene }: { scene: Scene }) {
 
   useEffect(() => {
     if (!task.data || !['completed', 'failed'].includes(task.data.status)) return
-    if (scenePackage?.id === task.data.id && scenePackage.status === task.data.status) {
+    if (task.data.status === 'completed' || task.data.status === 'failed') {
       setTaskId(null)
     }
-  }, [scenePackage, task.data])
+  }, [task.data])
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: courseSpaceQueryKey(courseId) })
   const createChapter = useMutation({
@@ -126,7 +128,7 @@ export function CourseSpacePage({ scene }: { scene: Scene }) {
     onSuccess: refresh,
   })
   const generate = useMutation({
-    mutationFn: (scopeDocumentId?: number) => api.generateScene(courseId!, scene, scopeDocumentId),
+    mutationFn: (scope?: GenerationScope) => api.generateScene(courseId!, scene, scope),
     onSuccess: (result) => setTaskId(result.id),
   })
 
@@ -137,8 +139,6 @@ export function CourseSpacePage({ scene }: { scene: Scene }) {
   }
 
   const { course, documents, chapters } = courseSpace.data
-  const displayedPackage = task.data ?? scenePackage
-  const isGenerating = generate.isPending || displayedPackage?.status === 'pending' || displayedPackage?.status === 'processing'
   const selectedChapter = chapters.find((item) => item.id === selectedChapterId) ?? null
   const normalizedChapterId = selectedChapterId ?? null
   const filteredDocuments = filterDocuments(documents, scene, normalizedChapterId)
@@ -146,6 +146,20 @@ export function CourseSpacePage({ scene }: { scene: Scene }) {
     (item) => ['SLIDES', 'HOMEWORK', 'OTHER', 'NOTES'].includes(item.document_type) && item.chapter_id == null,
   ).length
   const textbooks = documents.filter((item) => item.document_type === 'TEXTBOOK')
+  const scopedPackage = scene === 'follow'
+    ? courseSpace.data.chapter_packages[selectedChapterId == null ? 'unassigned' : String(selectedChapterId)] ?? null
+    : scene === 'textbook' && selectedTextbookId != null
+      ? courseSpace.data.document_packages[String(selectedTextbookId)] ?? null
+      : unscopedScenePackage
+  const completedScopedPackage = scene === 'follow'
+    ? courseSpace.data.chapter_completed_packages[selectedChapterId == null ? 'unassigned' : String(selectedChapterId)] ?? null
+    : scene === 'textbook' && selectedTextbookId != null
+      ? courseSpace.data.document_completed_packages[String(selectedTextbookId)] ?? null
+      : unscopedCompletedPackage
+  const taskMatchesSelection = task.data ? packageMatchesSelection(task.data, scene, selectedChapterId, selectedTextbookId) : false
+  const requestMatchesSelection = generate.variables ? scopeMatchesSelection(generate.variables, scene, selectedChapterId, selectedTextbookId) : false
+  const displayedPackage = taskMatchesSelection ? task.data! : scopedPackage
+  const isGenerating = (generate.isPending && requestMatchesSelection) || displayedPackage?.status === 'pending' || displayedPackage?.status === 'processing'
 
   function openAssistant(question = '') {
     setAssistantQuestion(question)
@@ -218,7 +232,7 @@ export function CourseSpacePage({ scene }: { scene: Scene }) {
               title={selectedChapter?.title ? `${selectedChapter.title}的资料` : '未分章节资料'}
               description="上传课件、练习或补充资料，新资料会直接归入当前章节。"
             />
-            <LearningSection packageData={displayedPackage} generating={isGenerating} canGenerate={documents.some((item) => ['SLIDES', 'HOMEWORK', 'OTHER', 'NOTES'].includes(item.document_type))} onGenerate={() => generate.mutate(undefined)} onSelectSection={openAssistant} sections={sceneInfo.follow.sections} emptyDescription="先上传当前章节的课件、练习或补充资料，再开始整理。" error={generate.error} />
+            <LearningSection title={selectedChapter?.title ?? '未分章节'} packageData={displayedPackage} previousPackage={completedScopedPackage} generating={isGenerating} canGenerate={filteredDocuments.length > 0} onGenerate={() => generate.mutate(selectedChapterId == null ? { unassigned: true } : { chapterId: selectedChapterId })} onSelectSection={openAssistant} sections={sceneInfo.follow.sections} emptyDescription="先上传当前章节的课件、练习或补充资料，再开始整理。" error={requestMatchesSelection ? generate.error : null} />
           </div>
         </div>
       ) : null}
@@ -226,8 +240,8 @@ export function CourseSpacePage({ scene }: { scene: Scene }) {
       {scene === 'textbook' ? (
         <div className="mt-6 space-y-5">
           <CourseMaterials courseId={courseId} documents={textbooks} allowedDocumentTypes={SCENE_UPLOAD_TYPES.textbook} title="我的教材" description="每本教材独立解析，避免不同版本的知识结构互相混合。" showDocumentList={false} />
-          <TextbookList documents={textbooks} selectedId={selectedTextbookId} onSelect={setSelectedTextbookId} onGenerate={(id) => generate.mutate(id)} generating={isGenerating} />
-          <LearningSection packageData={displayedPackage} generating={isGenerating} canGenerate={textbooks.length > 0} onGenerate={() => selectedTextbookId && generate.mutate(selectedTextbookId)} onSelectSection={openAssistant} sections={sceneInfo.textbook.sections} showInitialGenerate={false} emptyDescription="先上传一本教材，再为这本教材生成知识大纲。" error={generate.error} />
+          <TextbookList documents={textbooks} selectedId={selectedTextbookId} onSelect={setSelectedTextbookId} onGenerate={(id) => generate.mutate({ documentId: id })} generating={isGenerating} />
+          <LearningSection packageData={displayedPackage} previousPackage={completedScopedPackage} generating={isGenerating} canGenerate={textbooks.length > 0} onGenerate={() => selectedTextbookId && generate.mutate({ documentId: selectedTextbookId })} onSelectSection={openAssistant} sections={sceneInfo.textbook.sections} showInitialGenerate={false} emptyDescription="先上传一本教材，再为这本教材生成知识大纲。" error={requestMatchesSelection ? generate.error : null} />
           <TextbookKnowledgeSection courseId={courseId} />
         </div>
       ) : null}
@@ -235,7 +249,7 @@ export function CourseSpacePage({ scene }: { scene: Scene }) {
       {scene === 'exam' ? (
         <div className="mt-6 space-y-5">
           <CourseMaterials courseId={courseId} documents={filteredDocuments} allowedDocumentTypes={SCENE_UPLOAD_TYPES.exam} title="考试资料" description="上传试卷和练习资料，AI 只会依据这些内容整理考试冲刺建议。" />
-          <LearningSection packageData={displayedPackage} generating={isGenerating} canGenerate={filteredDocuments.length > 0} onGenerate={() => generate.mutate(undefined)} onSelectSection={openAssistant} sections={sceneInfo.exam.sections} emptyDescription="先上传试卷或练习资料，再开始整理考试重点。" error={generate.error} />
+          <LearningSection packageData={displayedPackage} previousPackage={completedScopedPackage} generating={isGenerating} canGenerate={filteredDocuments.length > 0} onGenerate={() => generate.mutate({})} onSelectSection={openAssistant} sections={sceneInfo.exam.sections} emptyDescription="先上传试卷或练习资料，再开始整理考试重点。" error={requestMatchesSelection ? generate.error : null} />
         </div>
       ) : null}
 
@@ -243,7 +257,7 @@ export function CourseSpacePage({ scene }: { scene: Scene }) {
         <div className="fixed inset-0 z-50 bg-stone-950/20" onMouseDown={() => setAssistantOpen(false)}>
           <aside className="absolute inset-x-0 bottom-0 max-h-[92vh] overflow-y-auto rounded-t-3xl bg-[#fffdfa] p-4 shadow-2xl sm:inset-y-0 sm:left-auto sm:w-full sm:max-w-md sm:rounded-none" onMouseDown={(event) => event.stopPropagation()} aria-label="AI 学习助手">
             <div className="mb-3 flex justify-end"><button className="rounded-lg p-2 hover:bg-stone-100" onClick={() => setAssistantOpen(false)} aria-label="关闭 AI 学习助手"><X className="size-5" /></button></div>
-            <CourseAssistant courseId={courseId} courseName={course.name} currentSection={selectedChapter?.title ?? sceneInfo[scene].label} scene={scene} chapterId={normalizedChapterId} initialQuestion={assistantQuestion} />
+            <CourseAssistant courseId={courseId} courseName={course.name} currentSection={selectedChapter?.title ?? sceneInfo[scene].label} scene={scene} chapterId={scene === 'follow' ? normalizedChapterId : undefined} textbookId={scene === 'textbook' ? selectedTextbookId : undefined} scopeUnassigned={scene === 'follow' && selectedChapterId == null} initialQuestion={assistantQuestion} />
           </aside>
         </div>
       ) : null}
@@ -260,12 +274,25 @@ function filterDocuments(documents: DocumentSummary[], scene: Scene, chapterId: 
   return documents.filter((item) => ['SLIDES', 'HOMEWORK', 'OTHER', 'NOTES'].includes(item.document_type) && item.chapter_id === chapterId)
 }
 
-function LearningSection({ packageData, generating, canGenerate, onGenerate, onSelectSection, sections, showInitialGenerate = true, emptyDescription, error }: { packageData: LearningPackage | null; generating: boolean; canGenerate: boolean; onGenerate: () => void; onSelectSection: (section: string) => void; sections: readonly string[]; showInitialGenerate?: boolean; emptyDescription: string; error: Error | null }) {
+function packageMatchesSelection(packageData: LearningPackage, scene: Scene, chapterId: number | null | undefined, textbookId: number | null) {
+  if (packageData.scene !== scene) return false
+  if (scene === 'follow') return chapterId == null ? packageData.scope_unassigned : packageData.scope_chapter_id === chapterId
+  if (scene === 'textbook') return packageData.scope_document_id === textbookId
+  return true
+}
+
+function scopeMatchesSelection(scope: GenerationScope, scene: Scene, chapterId: number | null | undefined, textbookId: number | null) {
+  if (scene === 'follow') return chapterId == null ? Boolean(scope.unassigned) : scope.chapterId === chapterId
+  if (scene === 'textbook') return scope.documentId === textbookId
+  return Object.keys(scope).length === 0
+}
+
+function LearningSection({ title, packageData, previousPackage, generating, canGenerate, onGenerate, onSelectSection, sections, showInitialGenerate = true, emptyDescription, error }: { title?: string; packageData: LearningPackage | null; previousPackage?: LearningPackage | null; generating: boolean; canGenerate: boolean; onGenerate: () => void; onSelectSection: (section: string) => void; sections: readonly string[]; showInitialGenerate?: boolean; emptyDescription: string; error: Error | null }) {
   return (
     <section>
-      <div className="mb-3"><h2 className="text-xl font-semibold text-stone-950">AI 整理结果</h2><p className="mt-1 text-sm text-stone-500">仅根据当前场景中的资料生成。</p></div>
+      <div className="mb-3"><h2 className="text-xl font-semibold text-stone-950">{title ? `${title} · AI 整理结果` : 'AI 整理结果'}</h2><p className="mt-1 text-sm text-stone-500">{title ? '只使用当前章节中的资料，结果不会与其他章节混合。' : '仅根据当前场景中的资料生成。'}</p></div>
       {error ? <p className="mb-3 rounded-xl bg-orange-50 px-3 py-2.5 text-sm text-orange-700">{error instanceof ApiError ? error.message : '暂时无法开始整理，请稍后重试。'}</p> : null}
-      <LearningPackageView learningPackage={packageData} generating={generating} canGenerate={canGenerate} onGenerate={onGenerate} onSelectSection={onSelectSection} allowedSections={[...sections]} showInitialGenerate={showInitialGenerate} emptyDescription={emptyDescription} />
+      <LearningPackageView learningPackage={packageData} previousPackage={previousPackage} generating={generating} canGenerate={canGenerate} onGenerate={onGenerate} onSelectSection={onSelectSection} allowedSections={[...sections]} showInitialGenerate={showInitialGenerate} emptyDescription={emptyDescription} />
     </section>
   )
 }

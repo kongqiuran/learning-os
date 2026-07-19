@@ -24,7 +24,7 @@ from src.api.serializers import (
     serialize_document,
     serialize_learning_package,
 )
-from src.services.analysis_service import get_learning_package, get_learning_package_task, get_scene_packages
+from src.services.analysis_service import get_learning_package, get_learning_package_task, get_scene_packages, get_scoped_packages
 from src.services.chapter_service import list_chapters
 from src.services.course_service import get_course_for_user
 from src.services.document_service import (
@@ -51,7 +51,13 @@ def get_course_space(course_id: int, user=Depends(require_current_user)):
     course = _require_course(course_id, user.id)
     documents = list_documents_for_course(user.id, course_id)
     package = get_learning_package(course_id, user.id)
-    return serialize_course_space(course, documents, package, list_chapters(course_id, user.id), get_scene_packages(course_id, user.id))
+    chapter_packages, document_packages = get_scoped_packages(course_id, user.id)
+    chapter_completed, document_completed = get_scoped_packages(course_id, user.id, completed_only=True)
+    return serialize_course_space(
+        course, documents, package, list_chapters(course_id, user.id),
+        get_scene_packages(course_id, user.id), chapter_packages, document_packages,
+        get_scene_packages(course_id, user.id, completed_only=True), chapter_completed, document_completed,
+    )
 
 
 @router.post(
@@ -150,7 +156,7 @@ def generate_learning_package(
 
 
 @router.post("/generations/{scene}", response_model=LearningPackageResponse, status_code=status.HTTP_202_ACCEPTED)
-def generate_scene(scene: str, background_tasks: BackgroundTasks, course_id: int, scope_document_id: int | None = None, user=Depends(require_current_user)):
+def generate_scene(scene: str, background_tasks: BackgroundTasks, course_id: int, scope_document_id: int | None = None, scope_chapter_id: int | None = None, scope_unassigned: bool = False, user=Depends(require_current_user)):
     if scene not in {"follow", "textbook", "exam"}:
         raise HTTPException(400, detail={"code": "invalid_scene", "message": "Invalid learning scene."})
     _require_course(course_id, user.id)
@@ -164,7 +170,7 @@ def generate_scene(scene: str, background_tasks: BackgroundTasks, course_id: int
     else:
         reservation = reserve_ai_generation(user.id)
     try:
-        package = queue_course_package(course_id, user.id, scene, scope_document_id)
+        package = queue_course_package(course_id, user.id, scene, scope_document_id, scope_chapter_id, scope_unassigned)
         package.usage_record_id = reservation.id if reservation else None
         package.entitlement_id = entitlement.id if entitlement else None
         from src.database import get_db_session
@@ -173,12 +179,20 @@ def generate_scene(scene: str, background_tasks: BackgroundTasks, course_id: int
             stored = session.get(LearningPackage, package.id)
             stored.usage_record_id = reservation.id if reservation else None
             stored.entitlement_id = entitlement.id if entitlement else None
+    except GenerationInProgressError as exc:
+        if reservation:
+            release_ai_generation(reservation)
+        raise HTTPException(409, detail={"code": "generation_in_progress", "message": str(exc)}) from exc
+    except ValueError as exc:
+        if reservation:
+            release_ai_generation(reservation)
+        raise HTTPException(400, detail={"code": "invalid_generation_scope", "message": str(exc)}) from exc
     except Exception:
         if reservation:
             release_ai_generation(reservation)
         raise
     if os.getenv("LEARNING_OS_TESTING", "").lower() in {"1", "true"}:
-        background_tasks.add_task(_run_generation_background_task, package.id, course_id, user.id, scene, scope_document_id)
+        background_tasks.add_task(_run_generation_background_task, package.id, course_id, user.id, scene, scope_document_id, scope_chapter_id, scope_unassigned)
     return serialize_learning_package(package)
 
 
@@ -209,8 +223,8 @@ def query_course_assistant(
 ):
     _require_course(course_id, user.id)
     try:
-        if payload.scene or payload.chapter_id or payload.textbook_id:
-            result = answer_course_question(course_id, user.id, payload.question, payload.current_section, scene=payload.scene, chapter_id=payload.chapter_id, textbook_id=payload.textbook_id)
+        if payload.scene or payload.chapter_id or payload.textbook_id or payload.scope_unassigned:
+            result = answer_course_question(course_id, user.id, payload.question, payload.current_section, scene=payload.scene, chapter_id=payload.chapter_id, textbook_id=payload.textbook_id, scope_unassigned=payload.scope_unassigned)
         else:
             result = answer_course_question(course_id, user.id, payload.question, payload.current_section)
         consume_assistant(user.id, course_id)
@@ -235,12 +249,12 @@ def _require_course(course_id, user_id):
     return course
 
 
-def _run_generation_background_task(package_id, course_id, user_id, scene=None, scope_document_id=None):
+def _run_generation_background_task(package_id, course_id, user_id, scene=None, scope_document_id=None, scope_chapter_id=None, scope_unassigned=False):
     try:
-        if scene is None and scope_document_id is None:
+        if scene is None and scope_document_id is None and scope_chapter_id is None and not scope_unassigned:
             run_queued_course_package(package_id, course_id, user_id)
         else:
-            run_queued_course_package(package_id, course_id, user_id, scene, scope_document_id)
+            run_queued_course_package(package_id, course_id, user_id, scene, scope_document_id, scope_chapter_id, scope_unassigned)
     except Exception:
         from src.database import get_db_session
         from src.models import LearningPackage

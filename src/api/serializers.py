@@ -60,16 +60,28 @@ def serialize_learning_package(package):
         created_at=package.created_at,
         scene=getattr(package, "scene", "legacy") or "legacy",
         scope_document_id=getattr(package, "scope_document_id", None),
+        scope_chapter_id=getattr(package, "scope_chapter_id", None),
+        scope_unassigned=bool(getattr(package, "scope_unassigned", False)),
+        scope_kind=getattr(package, "scope_kind", "course") or "course",
+        scope_key=getattr(package, "scope_key", "course") or "course",
+        source_fingerprint=getattr(package, "source_fingerprint", None),
+        prompt_version=getattr(package, "prompt_version", None),
+        is_stale=bool(getattr(package, "is_stale", False)),
     )
 
 
-def serialize_course_space(course, documents, learning_package, chapters=None, scene_packages=None):
+def serialize_course_space(course, documents, learning_package, chapters=None, scene_packages=None, chapter_packages=None, document_packages=None, scene_completed_packages=None, chapter_completed_packages=None, document_completed_packages=None):
     return CourseSpaceResponse(
         course=serialize_course_detail(course, documents, learning_package),
         documents=[serialize_document(document) for document in documents],
         learning_package=serialize_learning_package(learning_package),
         chapters=[ChapterResponse(id=item.id, title=item.title, position=item.position, document_count=sum(1 for document in documents if getattr(document, "chapter_id", None) == item.id), created_at=item.created_at, updated_at=item.updated_at) for item in (chapters or [])],
         scene_packages={key: serialize_learning_package(value) for key, value in (scene_packages or {}).items()},
+        scene_completed_packages={key: serialize_learning_package(value) for key, value in (scene_completed_packages or {}).items()},
+        chapter_packages={str(key): serialize_learning_package(value) for key, value in (chapter_packages or {}).items()},
+        chapter_completed_packages={str(key): serialize_learning_package(value) for key, value in (chapter_completed_packages or {}).items()},
+        document_packages={str(key): serialize_learning_package(value) for key, value in (document_packages or {}).items()},
+        document_completed_packages={str(key): serialize_learning_package(value) for key, value in (document_completed_packages or {}).items()},
     )
 
 

@@ -21,6 +21,7 @@ const sectionOrder = Object.keys(sectionLabels)
 
 export function LearningPackageView({
   learningPackage,
+  previousPackage,
   generating,
   canGenerate,
   onGenerate,
@@ -30,6 +31,7 @@ export function LearningPackageView({
   emptyDescription,
 }: {
   learningPackage: LearningPackage | null
+  previousPackage?: LearningPackage | null
   generating: boolean
   canGenerate: boolean
   onGenerate: () => void
@@ -51,7 +53,11 @@ export function LearningPackageView({
     )
   }
 
-  const completedPackage = learningPackage?.status === 'completed' ? learningPackage : null
+  const completedPackage = learningPackage?.status === 'completed'
+    ? learningPackage
+    : previousPackage?.status === 'completed'
+      ? previousPackage
+      : null
   const sections = completedPackage
     ? sectionOrder.filter((key) => !allowedSections || allowedSections.includes(key))
         .filter((key) => hasContent(completedPackage.content[key]))
@@ -60,17 +66,31 @@ export function LearningPackageView({
 
   return (
     <div className="space-y-4">
-      {isLoading ? (
-        <StatePanel variant="loading" title="正在整理课程内容" description="系统正在后台分析资料并生成课程学习内容，你可以离开此页面。" />
+      {isLoading && !completedPackage ? (
+        <StatePanel variant="loading" title={getProgressCopy(learningPackage?.current_stage).title} description={getProgressCopy(learningPackage?.current_stage).description} />
       ) : completedPackage ? (
         sections.length > 0 ? (
           <>
+            {isLoading ? (
+              <StatePanel variant="loading" title={getProgressCopy(learningPackage?.current_stage).title} description="旧结果仍可查看；新结果完成后会自动替换，不需要停留在当前页面。" />
+            ) : null}
+            {completedPackage.is_stale && !isLoading ? (
+              <StatePanel
+                variant="empty"
+                title="当前资料已经发生变化"
+                description="这里暂时保留上一次整理结果。重新整理后，AI 会只依据当前章节或当前教材的最新资料生成新版本。"
+                action={canGenerate ? <Button variant="ai" onClick={onGenerate}><Sparkles className="size-4" />按最新资料重新整理</Button> : null}
+              />
+            ) : null}
             <Card className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <div className="flex items-center gap-2 text-green-700"><BookOpenText className="size-4" /><span className="text-sm font-semibold">课程内容已就绪</span></div>
                 <p className="mt-1 text-xs text-slate-500">版本 {completedPackage.version} · 生成于 {formatDateTime(completedPackage.created_at)}</p>
               </div>
-              <span className="inline-flex items-center gap-2 rounded-xl bg-violet-50 px-3 py-2 text-xs font-medium text-violet-700"><Sparkles className="size-3.5" /> 基于当前课程资料</span>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-2 rounded-xl bg-violet-50 px-3 py-2 text-xs font-medium text-violet-700"><Sparkles className="size-3.5" /> {completedPackage.is_stale ? '基于上次整理时的资料' : '基于当前所选资料'}</span>
+                {!isLoading && canGenerate ? <Button variant="secondary" onClick={onGenerate}>重新整理当前内容</Button> : null}
+              </div>
             </Card>
             {sections.length > 1 ? (
               <nav className="sticky top-20 z-10 flex gap-2 overflow-x-auto rounded-2xl border border-stone-200 bg-[#fffdfa]/95 p-3 shadow-sm backdrop-blur" aria-label="AI 整理内容目录">
@@ -140,10 +160,26 @@ function formatKey(value: string) {
     topic: '主题', importance: '重要程度', core_explanation: '核心解释', must_master: '必须掌握',
     formulas_or_rules: '公式或规则', question_types: '常见题型', common_errors: '常见错误', memory_tips: '记忆提示',
     study_advice: '学习建议', evidence: '资料依据', chapter: '章节', summary: '概述', key_points: '重点',
+    overview: '本章概述', learning_objectives: '学习目标', key_concepts: '核心概念', learning_order: '学习顺序',
+    common_mistakes: '常见错误', point: '知识点', explanation: '详细解释', master_requirement: '掌握要求',
   }
   return labels[value] ?? value.replaceAll('_', ' ')
 }
 
 function formatDateTime(value: string) {
   return new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(value))
+}
+
+function getProgressCopy(stage: string | null | undefined) {
+  const stages: Record<string, { title: string; description: string }> = {
+    pending: { title: '已进入整理队列', description: '任务已提交，通常会很快开始。你可以切换章节或离开此页面。' },
+    recovered: { title: '正在恢复整理任务', description: '系统正在自动恢复任务，不需要重新点击。' },
+    retry_queued: { title: '正在自动重试', description: '刚才的处理暂时中断，系统已自动重试，本次不会重复扣除额度。' },
+    starting: { title: '正在准备当前内容', description: '正在确认本章节资料范围，只会处理当前选择的内容。' },
+    document_analyzer: { title: '正在读取本章节资料', description: '正在提取课件、作业和笔记中的知识点；已分析过的资料会直接复用。' },
+    follow_chapter_generator: { title: '正在生成本章知识块', description: '资料读取已完成，正在组织章节总结和重点内容，这是最后一步。' },
+    course_analyzer: { title: '正在汇总资料重点', description: '正在建立知识结构，完成后会继续生成可阅读的整理结果。' },
+    learning_package_generator: { title: '正在生成整理结果', description: '资料分析已完成，正在生成最终内容，这是最后一步。' },
+  }
+  return stages[stage ?? ''] ?? { title: '正在整理当前内容', description: '系统正在后台处理，你可以切换页面，完成后结果会自动显示。' }
 }

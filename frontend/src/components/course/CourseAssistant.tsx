@@ -13,6 +13,8 @@ export function CourseAssistant({
   currentSection,
   scene,
   chapterId,
+  textbookId,
+  scopeUnassigned = false,
   initialQuestion = '',
 }: {
   courseId: string | undefined
@@ -20,6 +22,8 @@ export function CourseAssistant({
   currentSection: string
   scene?: string
   chapterId?: number | null
+  textbookId?: number | null
+  scopeUnassigned?: boolean
   initialQuestion?: string
 }) {
   const [question, setQuestion] = useState('')
@@ -36,7 +40,7 @@ export function CourseAssistant({
     const normalizedQuestion = question.trim()
     if (!normalizedQuestion) return
     setSubmittedQuestion(normalizedQuestion)
-    assistant.mutate({ question: normalizedQuestion, current_section: currentSection || undefined, scene, chapter_id: chapterId ?? undefined })
+    assistant.mutate({ question: normalizedQuestion, current_section: currentSection || undefined, scene, chapter_id: chapterId ?? undefined, textbook_id: textbookId ?? undefined, scope_unassigned: scopeUnassigned })
   }
 
   return (

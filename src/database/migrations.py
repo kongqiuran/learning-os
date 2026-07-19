@@ -18,6 +18,20 @@ MIGRATIONS = (
     ("20260719_v2_entitlement", {
         "learning_packages": {"entitlement_id": "INTEGER REFERENCES course_entitlements(id) ON DELETE SET NULL"},
     }),
+    ("20260719_chapter_scoped_packages", {
+        "learning_packages": {
+            "scope_chapter_id": "INTEGER REFERENCES chapters(id) ON DELETE SET NULL",
+            "scope_unassigned": "BOOLEAN NOT NULL DEFAULT 0",
+        },
+    }),
+    ("20260719_generation_scope_metadata", {
+        "learning_packages": {
+            "scope_kind": "VARCHAR(20) NOT NULL DEFAULT 'course'",
+            "scope_key": "VARCHAR(80) NOT NULL DEFAULT 'course'",
+            "source_fingerprint": "VARCHAR(64)",
+            "prompt_version": "VARCHAR(40)",
+        },
+    }),
 )
 
 
@@ -36,4 +50,9 @@ def run_schema_migrations(engine):
                 for name, definition in columns.items():
                     if name not in existing:
                         connection.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {name} {definition}"))
+            if version == "20260719_generation_scope_metadata":
+                connection.execute(text("UPDATE learning_packages SET scope_kind = 'document', scope_key = 'document:' || scope_document_id WHERE scope_document_id IS NOT NULL"))
+                connection.execute(text("UPDATE learning_packages SET scope_kind = 'chapter', scope_key = 'chapter:' || scope_chapter_id WHERE scope_chapter_id IS NOT NULL"))
+                connection.execute(text("UPDATE learning_packages SET scope_kind = 'unassigned', scope_key = 'unassigned' WHERE scope_unassigned = 1"))
+                connection.execute(text("CREATE INDEX IF NOT EXISTS ix_learning_packages_scope_lookup ON learning_packages(course_id, scene, scope_key, version DESC)"))
             connection.execute(text("INSERT INTO schema_migrations(version) VALUES (:version)"), {"version": version})

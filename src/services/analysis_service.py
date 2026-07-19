@@ -1,8 +1,10 @@
 from datetime import datetime, timezone
+import hashlib
 from sqlalchemy import func, select
 
 from src.ai.analyzers.course_analyzer import analyze_course_documents
 from src.ai.analyzers.document_analyzer import analyze_document
+from src.ai.generators.follow_chapter_generator import generate_follow_chapter_package
 from src.ai.generators.learning_package_generator import generate_learning_package
 from src.ai.llm_client import LLMClient
 from src.config import get_max_chars_per_request
@@ -20,10 +22,33 @@ SCENE_TYPES = {
     "textbook": {"TEXTBOOK"},
     "exam": {"EXAM", "HOMEWORK"},
 }
+PROMPT_VERSION = "follow-chapter-v1"
 
 
-def analyze_course(course_id, user_id, llm_client=None, language="zh", package_id=None, scene=None, scope_document_id=None):
-    course, documents = _load_course_documents(course_id, user_id, scene, scope_document_id)
+def get_scope_metadata(scope_document_id=None, scope_chapter_id=None, scope_unassigned=False):
+    if scope_document_id is not None:
+        return "document", f"document:{int(scope_document_id)}"
+    if scope_chapter_id is not None:
+        return "chapter", f"chapter:{int(scope_chapter_id)}"
+    if scope_unassigned:
+        return "unassigned", "unassigned"
+    return "course", "course"
+
+
+def validate_generation_scope(scene, scope_document_id=None, scope_chapter_id=None, scope_unassigned=False):
+    selected = sum((scope_document_id is not None, scope_chapter_id is not None, bool(scope_unassigned)))
+    if selected > 1:
+        raise ValueError("Choose exactly one generation scope.")
+    if scene == "follow" and not (scope_chapter_id is not None or scope_unassigned):
+        raise ValueError("Follow-course generation must target one chapter.")
+    if scene == "textbook" and scope_document_id is None:
+        raise ValueError("Textbook generation must target one textbook document.")
+    if scene == "exam" and selected:
+        raise ValueError("Exam generation is course-scoped and does not accept a chapter or document.")
+
+
+def analyze_course(course_id, user_id, llm_client=None, language="zh", package_id=None, scene=None, scope_document_id=None, scope_chapter_id=None, scope_unassigned=False):
+    course, documents = _load_course_documents(course_id, user_id, scene, scope_document_id, scope_chapter_id, scope_unassigned)
     if course is None:
         raise ValueError("The course does not exist or access is denied.")
     if not documents:
@@ -33,7 +58,7 @@ def analyze_course(course_id, user_id, llm_client=None, language="zh", package_i
     package = (
         _start_existing_package(package_id, course.id, user_id)
         if package_id is not None
-        else _create_package(course.id, user_id, "processing")
+        else _create_package(course.id, user_id, "processing", scene or "legacy", scope_document_id, scope_chapter_id, scope_unassigned, documents)
     )
     try:
         client = llm_client or LLMClient(
@@ -62,24 +87,28 @@ def analyze_course(course_id, user_id, llm_client=None, language="zh", package_i
                     language,
                 )
             )
-        _update_package_progress(package.id, course.id, user_id, "course_analyzer", 0)
-        course_analysis = analyze_course_documents(
-            analyses,
-            llm_client=client,
-            language=language,
-        )
-        _update_package_progress(
-            package.id,
-            course.id,
-            user_id,
-            "learning_package_generator",
-            0,
-        )
-        content = generate_learning_package(
-            course_analysis,
-            llm_client=client,
-            language=language,
-        )
+        if scene == "follow" and (scope_chapter_id is not None or scope_unassigned):
+            _update_package_progress(package.id, course.id, user_id, "follow_chapter_generator", 0)
+            content = generate_follow_chapter_package(analyses, llm_client=client, language=language)
+        else:
+            _update_package_progress(package.id, course.id, user_id, "course_analyzer", 0)
+            course_analysis = analyze_course_documents(
+                analyses,
+                llm_client=client,
+                language=language,
+            )
+            _update_package_progress(
+                package.id,
+                course.id,
+                user_id,
+                "learning_package_generator",
+                0,
+            )
+            content = generate_learning_package(
+                course_analysis,
+                llm_client=client,
+                language=language,
+            )
         with get_db_session() as session:
             stored_package = _require_scoped_package(
                 session,
@@ -146,12 +175,50 @@ def get_learning_package(course_id, user_id):
         )
 
 
-def get_scene_packages(course_id, user_id):
+def get_scene_packages(course_id, user_id, completed_only=False):
     result = {}
     with get_db_session() as session:
         for scene in SCENE_TYPES:
-            result[scene] = session.scalar(select(LearningPackage).join(Course).where(LearningPackage.course_id == int(course_id), Course.user_id == int(user_id), LearningPackage.scene == scene).order_by(LearningPackage.version.desc(), LearningPackage.id.desc()))
+            statement = select(LearningPackage).join(Course).where(
+                LearningPackage.course_id == int(course_id),
+                Course.user_id == int(user_id),
+                LearningPackage.scene == scene,
+                LearningPackage.scope_key == "course",
+            )
+            if completed_only:
+                statement = statement.where(LearningPackage.status == "completed")
+            package = session.scalar(statement.order_by(LearningPackage.version.desc(), LearningPackage.id.desc()))
+            result[scene] = _mark_package_staleness(session, package)
     return result
+
+
+def get_scoped_packages(course_id, user_id, completed_only=False):
+    chapter_packages = {}
+    document_packages = {}
+    with get_db_session() as session:
+        packages = session.scalars(
+            select(LearningPackage)
+            .join(Course)
+            .where(
+                LearningPackage.course_id == int(course_id),
+                Course.user_id == int(user_id),
+                LearningPackage.scene.in_(("follow", "textbook")),
+                LearningPackage.scope_key != "course",
+            )
+            .order_by(LearningPackage.version.desc(), LearningPackage.id.desc())
+        )
+        for package in packages:
+            if completed_only and package.status != "completed":
+                continue
+            _mark_package_staleness(session, package)
+            if package.scene == "follow":
+                if package.scope_chapter_id is not None:
+                    chapter_packages.setdefault(str(package.scope_chapter_id), package)
+                elif package.scope_unassigned:
+                    chapter_packages.setdefault("unassigned", package)
+            elif package.scene == "textbook" and package.scope_document_id is not None:
+                document_packages.setdefault(str(package.scope_document_id), package)
+    return chapter_packages, document_packages
 
 
 def get_learning_package_task(package_id, course_id, user_id):
@@ -169,22 +236,44 @@ def get_learning_package_task(package_id, course_id, user_id):
         )
 
 
-def create_learning_package_task(course_id, user_id, scene="legacy", scope_document_id=None):
-    course, documents = _load_course_documents(course_id, user_id, None if scene == "legacy" else scene, scope_document_id)
+def create_learning_package_task(course_id, user_id, scene="legacy", scope_document_id=None, scope_chapter_id=None, scope_unassigned=False):
+    if scene != "legacy":
+        validate_generation_scope(scene, scope_document_id, scope_chapter_id, scope_unassigned)
+    course, documents = _load_course_documents(course_id, user_id, None if scene == "legacy" else scene, scope_document_id, scope_chapter_id, scope_unassigned)
     if course is None:
         raise ValueError("The course does not exist or access is denied.")
     if not documents:
         raise ValueError("Upload at least one supported document before generating a learning package.")
     _validate_document_course_binding(course_id, documents)
-    package = _create_package(course.id, user_id, "pending")
+    package = _create_package(course.id, user_id, "pending", scene, scope_document_id, scope_chapter_id, scope_unassigned, documents)
     with get_db_session() as session:
         stored = session.get(LearningPackage, package.id)
         stored.scene = scene
         stored.scope_document_id = scope_document_id
+        stored.scope_chapter_id = scope_chapter_id
+        stored.scope_unassigned = bool(scope_unassigned)
         session.flush()
         package.scene = scene
         package.scope_document_id = scope_document_id
+        package.scope_chapter_id = scope_chapter_id
+        package.scope_unassigned = bool(scope_unassigned)
     return package
+
+
+def get_active_scoped_package(course_id, user_id, scene, scope_key):
+    with get_db_session() as session:
+        return session.scalar(
+            select(LearningPackage)
+            .join(Course)
+            .where(
+                LearningPackage.course_id == int(course_id),
+                Course.user_id == int(user_id),
+                LearningPackage.scene == scene,
+                LearningPackage.scope_key == scope_key,
+                LearningPackage.status.in_(("pending", "processing")),
+            )
+            .order_by(LearningPackage.created_at.desc(), LearningPackage.id.desc())
+        )
 
 
 def _validate_document_course_binding(course_id, documents):
@@ -192,7 +281,7 @@ def _validate_document_course_binding(course_id, documents):
         raise ValueError("Document-course mismatch detected.")
 
 
-def _load_course_documents(course_id, user_id, scene=None, scope_document_id=None):
+def _load_course_documents(course_id, user_id, scene=None, scope_document_id=None, scope_chapter_id=None, scope_unassigned=False):
     if course_id is None or user_id is None:
         return None, []
     with get_db_session() as session:
@@ -213,15 +302,24 @@ def _load_course_documents(course_id, user_id, scene=None, scope_document_id=Non
             statement = statement.where(Document.document_type.in_(SCENE_TYPES[scene]))
         if scope_document_id is not None:
             statement = statement.where(Document.id == int(scope_document_id))
+        if scope_chapter_id is not None:
+            statement = statement.where(Document.chapter_id == int(scope_chapter_id))
+        elif scope_unassigned:
+            statement = statement.where(Document.chapter_id.is_(None))
         documents = list(session.scalars(statement))
         return course, documents
 
 
-def _create_package(course_id, user_id, status):
+def _create_package(course_id, user_id, status, scene="legacy", scope_document_id=None, scope_chapter_id=None, scope_unassigned=False, documents=None):
+    scope_kind, scope_key = get_scope_metadata(scope_document_id, scope_chapter_id, scope_unassigned)
     with get_db_session() as session:
         _require_scoped_course(session, course_id, user_id)
         latest_version = session.scalar(
-            select(func.max(LearningPackage.version)).where(LearningPackage.course_id == course_id)
+            select(func.max(LearningPackage.version)).where(
+                LearningPackage.course_id == course_id,
+                LearningPackage.scene == scene,
+                LearningPackage.scope_key == scope_key,
+            )
         )
         package = LearningPackage(
             course_id=course_id,
@@ -230,9 +328,44 @@ def _create_package(course_id, user_id, status):
             content_json={},
             current_stage="pending" if status == "pending" else "starting",
             retry_count=0,
+            scene=scene,
+            scope_document_id=scope_document_id,
+            scope_chapter_id=scope_chapter_id,
+            scope_unassigned=bool(scope_unassigned),
+            scope_kind=scope_kind,
+            scope_key=scope_key,
+            source_fingerprint=_source_fingerprint(documents or []),
+            prompt_version=PROMPT_VERSION if scene == "follow" and scope_kind in {"chapter", "unassigned"} else None,
         )
         session.add(package)
         session.flush()
+    return package
+
+
+def _source_fingerprint(documents):
+    payload = "|".join(
+        f"{item.id}:{item.document_type}:{getattr(item, 'chapter_id', None)}:{item.file_size}"
+        for item in sorted(documents, key=lambda value: value.id)
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _mark_package_staleness(session, package):
+    if package is None:
+        return None
+    package.is_stale = False
+    if not package.source_fingerprint:
+        return package
+    statement = select(Document).where(Document.course_id == package.course_id)
+    if package.scene in SCENE_TYPES:
+        statement = statement.where(Document.document_type.in_(SCENE_TYPES[package.scene]))
+    if package.scope_kind == "document":
+        statement = statement.where(Document.id == package.scope_document_id)
+    elif package.scope_kind == "chapter":
+        statement = statement.where(Document.chapter_id == package.scope_chapter_id)
+    elif package.scope_kind == "unassigned":
+        statement = statement.where(Document.chapter_id.is_(None))
+    package.is_stale = _source_fingerprint(list(session.scalars(statement))) != package.source_fingerprint
     return package
 
 

@@ -8,7 +8,7 @@ from src.ai.prompt_manager import STRUCTURED_OUTPUT_RULES
 from src.config import get_assistant_max_context_chars
 from src.database import get_db_session
 from src.models import Course, Document, DocumentAnalysis
-from src.services.analysis_service import SCENE_TYPES, get_learning_package, get_scene_packages
+from src.services.analysis_service import SCENE_TYPES, get_learning_package, get_scene_packages, get_scoped_packages
 
 
 INSUFFICIENT_CONTEXT_ANSWER = "当前课程资料中没有足够信息。"
@@ -30,8 +30,8 @@ class AssistantAnswer:
     source_files: list[str]
 
 
-def answer_course_question(course_id, user_id, question, current_section=None, llm_client=None, scene=None, chapter_id=None, textbook_id=None):
-    context, source_files = _build_context(course_id, user_id, current_section, scene, chapter_id, textbook_id)
+def answer_course_question(course_id, user_id, question, current_section=None, llm_client=None, scene=None, chapter_id=None, textbook_id=None, scope_unassigned=False):
+    context, source_files = _build_context(course_id, user_id, current_section, scene, chapter_id, textbook_id, scope_unassigned)
     if not context:
         return AssistantAnswer(INSUFFICIENT_CONTEXT_ANSWER, [])
 
@@ -55,13 +55,19 @@ def answer_course_question(course_id, user_id, question, current_section=None, l
     return AssistantAnswer(answer, source_files)
 
 
-def _build_context(course_id, user_id, current_section, scene=None, chapter_id=None, textbook_id=None):
+def _build_context(course_id, user_id, current_section, scene=None, chapter_id=None, textbook_id=None, scope_unassigned=False):
     limit = get_assistant_max_context_chars()
     parts = []
     source_files = []
     remaining = limit
 
-    package = get_scene_packages(course_id, user_id).get(scene) if scene in SCENE_TYPES else get_learning_package(course_id, user_id)
+    chapter_packages, document_packages = get_scoped_packages(course_id, user_id)
+    if scene == "follow" and (chapter_id is not None or scope_unassigned):
+        package = chapter_packages.get("unassigned" if scope_unassigned else str(chapter_id))
+    elif scene == "textbook" and textbook_id is not None:
+        package = document_packages.get(str(textbook_id))
+    else:
+        package = get_scene_packages(course_id, user_id).get(scene) if scene in SCENE_TYPES else get_learning_package(course_id, user_id)
     if package is not None and package.status == "completed" and package.content_json:
         for label, content in _ordered_package_sections(package.content_json, current_section):
             remaining = _append_bounded(parts, f"## {label}\n{_to_text(content)}", remaining)
@@ -69,7 +75,7 @@ def _build_context(course_id, user_id, current_section, scene=None, chapter_id=N
                 break
 
     if remaining > 0:
-        for document, analysis in _load_document_analyses(course_id, user_id, scene, chapter_id, textbook_id):
+        for document, analysis in _load_document_analyses(course_id, user_id, scene, chapter_id, textbook_id, scope_unassigned):
             analysis_text = _to_text(
                 {
                     "summary": analysis.summary,
@@ -99,7 +105,7 @@ def _ordered_package_sections(content, current_section):
     return sorted(items, key=lambda item: item[0] != requested_key)
 
 
-def _load_document_analyses(course_id, user_id, scene=None, chapter_id=None, textbook_id=None):
+def _load_document_analyses(course_id, user_id, scene=None, chapter_id=None, textbook_id=None, scope_unassigned=False):
     with get_db_session() as session:
         statement = (
             select(Document, DocumentAnalysis)
@@ -116,6 +122,8 @@ def _load_document_analyses(course_id, user_id, scene=None, chapter_id=None, tex
             statement = statement.where(Document.document_type.in_(SCENE_TYPES[scene]))
         if chapter_id is not None:
             statement = statement.where(Document.chapter_id == int(chapter_id))
+        elif scope_unassigned:
+            statement = statement.where(Document.chapter_id.is_(None))
         if textbook_id is not None:
             statement = statement.where(Document.id == int(textbook_id))
         return list(session.execute(statement).all())

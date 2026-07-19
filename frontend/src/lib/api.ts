@@ -171,8 +171,14 @@ export const api = {
     request<{ message: string }>(`/api/courses/${courseId}/documents/${documentId}`, { method: 'DELETE' }),
   generateLearningPackage: (courseId: number | string) =>
     request<LearningPackage>(`/api/courses/${courseId}/learning-package/generate`, { method: 'POST' }),
-  generateScene: (courseId: number | string, scene: string, scopeDocumentId?: number) =>
-    request<LearningPackage>(`/api/courses/${courseId}/generations/${scene}${scopeDocumentId ? `?scope_document_id=${scopeDocumentId}` : ''}`, { method: 'POST' }),
+  generateScene: (courseId: number | string, scene: string, scope?: { documentId?: number; chapterId?: number; unassigned?: boolean }) => {
+    const params = new URLSearchParams()
+    if (scope?.documentId != null) params.set('scope_document_id', String(scope.documentId))
+    if (scope?.chapterId != null) params.set('scope_chapter_id', String(scope.chapterId))
+    if (scope?.unassigned) params.set('scope_unassigned', 'true')
+    const query = params.size ? `?${params.toString()}` : ''
+    return request<LearningPackage>(`/api/courses/${courseId}/generations/${scene}${query}`, { method: 'POST' })
+  },
   createChapter: (courseId: number | string, title: string) => request<Chapter>(`/api/courses/${courseId}/chapters`, { method: 'POST', body: JSON.stringify({ title }) }),
   updateChapter: (courseId: number | string, chapterId: number, input: { title?: string; position?: number }) => request<Chapter>(`/api/courses/${courseId}/chapters/${chapterId}`, { method: 'PATCH', body: JSON.stringify(input) }),
   deleteChapter: (courseId: number | string, chapterId: number, materialAction: 'keep_unassigned' | 'delete') => request<{ message: string }>(`/api/courses/${courseId}/chapters/${chapterId}`, { method: 'DELETE', body: JSON.stringify({ material_action: materialAction }) }),

@@ -6,6 +6,7 @@ SUPPORTED_PROMPTS = {
     "document_analyzer",
     "course_analyzer",
     "learning_package_generator",
+    "follow_chapter_generator",
 }
 
 STRUCTURED_OUTPUT_RULES = """

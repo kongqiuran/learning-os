@@ -1,7 +1,7 @@
 import unittest
 from datetime import datetime, timezone
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
 
@@ -75,6 +75,9 @@ class CourseSpaceApiTest(unittest.TestCase):
             patch("src.api.routers.course_space.get_course_for_user", return_value=course),
             patch("src.api.routers.course_space.list_documents_for_course", return_value=[document]),
             patch("src.api.routers.course_space.get_learning_package", return_value=package),
+            patch("src.api.routers.course_space.list_chapters", return_value=[]),
+            patch("src.api.routers.course_space.get_scene_packages", return_value={}),
+            patch("src.api.routers.course_space.get_scoped_packages", return_value=({}, {})),
         ):
             response = self.client.get("/api/courses/10/space")
 
@@ -130,6 +133,8 @@ class CourseSpaceApiTest(unittest.TestCase):
 
     def test_generate_returns_accepted_task_and_assistant_delegates(self):
         package = fake_package(status="pending")
+        db_context = MagicMock()
+        db_context.__enter__.return_value.get.return_value = None
         with (
             patch("src.api.routers.course_space.get_course_for_user", return_value=fake_course()),
             patch(
@@ -138,6 +143,8 @@ class CourseSpaceApiTest(unittest.TestCase):
             ) as reserve_usage,
             patch("src.api.routers.course_space.queue_course_package", return_value=package) as queue,
             patch("src.api.routers.course_space.run_queued_course_package") as run_task,
+            patch("src.api.routers.course_space.consume_assistant"),
+            patch("src.database.get_db_session", return_value=db_context),
             patch(
                 "src.api.routers.course_space.answer_course_question",
                 return_value=AssistantAnswer("根据课程资料解释。", ["lecture.md"]),
@@ -156,6 +163,28 @@ class CourseSpaceApiTest(unittest.TestCase):
         queue.assert_called_once_with(10, self.user.id)
         run_task.assert_called_once_with(30, 10, self.user.id)
         answer.assert_called_once_with(10, self.user.id, "Why?", "重点内容")
+
+    def test_follow_generation_passes_chapter_scope(self):
+        package = fake_package(status="pending")
+        package.scene = "follow"
+        package.scope_chapter_id = 7
+        package.scope_unassigned = False
+        package.scope_document_id = None
+        db_context = MagicMock()
+        db_context.__enter__.return_value.get.return_value = SimpleNamespace()
+        with (
+            patch("src.api.routers.course_space.get_course_for_user", return_value=fake_course()),
+            patch("src.api.routers.course_space.get_active_entitlement", return_value=None),
+            patch("src.api.routers.course_space.reserve_ai_generation", return_value=SimpleNamespace(id=40, user_id=self.user.id, period_key="2026-07")),
+            patch("src.api.routers.course_space.queue_course_package", return_value=package) as queue,
+            patch("src.api.routers.course_space.run_queued_course_package"),
+            patch("src.database.get_db_session", return_value=db_context),
+        ):
+            response = self.client.post("/api/courses/10/generations/follow?scope_chapter_id=7")
+
+        self.assertEqual(response.status_code, 202)
+        self.assertEqual(response.json()["scope_chapter_id"], 7)
+        queue.assert_called_once_with(10, self.user.id, "follow", None, 7, False)
 
     def test_generation_task_status_is_scoped_to_course_owner(self):
         package = fake_package(status="processing")

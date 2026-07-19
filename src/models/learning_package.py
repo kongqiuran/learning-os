@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, JSON, String, Text
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Integer, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.database.base import Base
@@ -25,6 +25,12 @@ class LearningPackage(Base):
     retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     scene: Mapped[str] = mapped_column(String(20), nullable=False, default="legacy", index=True)
     scope_document_id: Mapped[int | None] = mapped_column(ForeignKey("documents.id", ondelete="SET NULL"), nullable=True)
+    scope_chapter_id: Mapped[int | None] = mapped_column(ForeignKey("chapters.id", ondelete="SET NULL"), nullable=True, index=True)
+    scope_unassigned: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    scope_kind: Mapped[str] = mapped_column(String(20), nullable=False, default="course", index=True)
+    scope_key: Mapped[str] = mapped_column(String(80), nullable=False, default="course", index=True)
+    source_fingerprint: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    prompt_version: Mapped[str | None] = mapped_column(String(40), nullable=True)
     usage_record_id: Mapped[int | None] = mapped_column(ForeignKey("usage_records.id", ondelete="SET NULL"), nullable=True)
     entitlement_id: Mapped[int | None] = mapped_column(ForeignKey("course_entitlements.id", ondelete="SET NULL"), nullable=True)
     heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

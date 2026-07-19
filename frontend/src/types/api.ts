@@ -64,6 +64,13 @@ export interface LearningPackage {
   created_at: string
   scene: 'legacy' | 'follow' | 'textbook' | 'exam'
   scope_document_id: number | null
+  scope_chapter_id: number | null
+  scope_unassigned: boolean
+  scope_kind: 'course' | 'chapter' | 'document' | 'unassigned'
+  scope_key: string
+  source_fingerprint: string | null
+  prompt_version: string | null
+  is_stale: boolean
 }
 
 export interface Chapter {
@@ -81,6 +88,11 @@ export interface CourseSpaceResponse {
   learning_package: LearningPackage | null
   chapters: Chapter[]
   scene_packages: Partial<Record<'follow' | 'textbook' | 'exam', LearningPackage | null>>
+  scene_completed_packages: Partial<Record<'follow' | 'textbook' | 'exam', LearningPackage | null>>
+  chapter_packages: Record<string, LearningPackage>
+  chapter_completed_packages: Record<string, LearningPackage>
+  document_packages: Record<string, LearningPackage>
+  document_completed_packages: Record<string, LearningPackage>
 }
 
 export interface AssistantQueryInput {
@@ -89,6 +101,7 @@ export interface AssistantQueryInput {
   scene?: string
   chapter_id?: number
   textbook_id?: number
+  scope_unassigned?: boolean
 }
 
 export interface AssistantQueryResponse {

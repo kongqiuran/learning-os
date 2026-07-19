@@ -10,12 +10,14 @@ TEST_DIR = tempfile.TemporaryDirectory()
 
 from src.database import create_database_tables, get_db_session  # noqa: E402
 from src.ai.llm_client import LLMGenerationError  # noqa: E402
-from src.models import Course, Document, DocumentAnalysis, LearningPackage, User  # noqa: E402
+from src.models import Chapter, Course, Document, DocumentAnalysis, LearningPackage, User  # noqa: E402
 from src.services.analysis_service import (  # noqa: E402
     _validate_document_course_binding,
+    _load_course_documents,
     analyze_course,
     create_learning_package_task,
     get_learning_package,
+    get_scoped_packages,
 )
 from src.services.file_parser_service import extract_text  # noqa: E402
 from src.services.document_service import (  # noqa: E402
@@ -81,6 +83,15 @@ class FakeLLMClient:
         }
 
 
+class StageRecordingLLMClient(FakeLLMClient):
+    def __init__(self):
+        self.stages = []
+
+    def generate(self, system_prompt, user_prompt, stage="unknown"):
+        self.stages.append(stage)
+        return super().generate(system_prompt, user_prompt, stage)
+
+
 class FailingLLMClient:
     def generate(self, system_prompt, user_prompt, stage="unknown"):
         raise LLMGenerationError(
@@ -103,8 +114,112 @@ class AnalysisFlowTest(unittest.TestCase):
 
     def setUp(self):
         with get_db_session() as session:
-            for model in (LearningPackage, DocumentAnalysis, Document, Course, User):
+            for model in (LearningPackage, DocumentAnalysis, Document, Chapter, Course, User):
                 session.query(model).delete()
+
+    def test_follow_documents_are_scoped_to_one_chapter(self):
+        first_path = Path(TEST_DIR.name) / "chapter-1.txt"
+        second_path = Path(TEST_DIR.name) / "chapter-2.txt"
+        first_path.write_text("First chapter", encoding="utf-8")
+        second_path.write_text("Second chapter", encoding="utf-8")
+        with get_db_session() as session:
+            user = User(email="chapters@example.com", password_hash="test")
+            session.add(user)
+            session.flush()
+            course = Course(user_id=user.id, name="Scoped course")
+            session.add(course)
+            session.flush()
+            first_chapter = Chapter(course_id=course.id, title="第一章", position=0)
+            second_chapter = Chapter(course_id=course.id, title="第二章", position=1)
+            session.add_all([first_chapter, second_chapter])
+            session.flush()
+            first_document = self._document(user.id, course.id, first_path, "text/plain")
+            first_document.document_type = "NOTES"
+            first_document.chapter_id = first_chapter.id
+            second_document = self._document(user.id, course.id, second_path, "text/plain")
+            second_document.document_type = "NOTES"
+            second_document.chapter_id = second_chapter.id
+            session.add_all([first_document, second_document])
+            session.flush()
+            user_id, course_id, first_chapter_id = user.id, course.id, first_chapter.id
+
+        _, documents = _load_course_documents(course_id, user_id, "follow", scope_chapter_id=first_chapter_id)
+
+        self.assertEqual([document.original_filename for document in documents], ["chapter-1.txt"])
+
+    def test_follow_chapter_generation_skips_course_wide_pass(self):
+        path = Path(TEST_DIR.name) / "focused-chapter.txt"
+        path.write_text("Focused chapter material", encoding="utf-8")
+        with get_db_session() as session:
+            user = User(email="fast-follow@example.com", password_hash="test")
+            session.add(user)
+            session.flush()
+            course = Course(user_id=user.id, name="Fast follow")
+            session.add(course)
+            session.flush()
+            chapter = Chapter(course_id=course.id, title="第一章", position=0)
+            session.add(chapter)
+            session.flush()
+            document = self._document(user.id, course.id, path, "text/plain")
+            document.document_type = "NOTES"
+            document.chapter_id = chapter.id
+            session.add(document)
+            session.flush()
+            user_id, course_id, chapter_id = user.id, course.id, chapter.id
+
+        task = create_learning_package_task(course_id, user_id, "follow", scope_chapter_id=chapter_id)
+        client = StageRecordingLLMClient()
+        result = analyze_course(course_id, user_id, llm_client=client, package_id=task.id, scene="follow", scope_chapter_id=chapter_id)
+
+        self.assertEqual(result.status, "completed")
+        self.assertIn("follow_chapter_generator", client.stages)
+        self.assertNotIn("course_analyzer", client.stages)
+        self.assertNotIn("learning_package_generator", client.stages)
+
+    def test_chapter_packages_have_independent_versions_and_stale_detection(self):
+        first_path = Path(TEST_DIR.name) / "scope-version-1.txt"
+        second_path = Path(TEST_DIR.name) / "scope-version-2.txt"
+        first_path.write_text("First scope", encoding="utf-8")
+        second_path.write_text("Second scope", encoding="utf-8")
+        with get_db_session() as session:
+            user = User(email="scope-versions@example.com", password_hash="test")
+            session.add(user)
+            session.flush()
+            course = Course(user_id=user.id, name="Scope versions")
+            session.add(course)
+            session.flush()
+            first_chapter = Chapter(course_id=course.id, title="First", position=0)
+            second_chapter = Chapter(course_id=course.id, title="Second", position=1)
+            session.add_all([first_chapter, second_chapter])
+            session.flush()
+            first_document = self._document(user.id, course.id, first_path, "text/plain")
+            first_document.document_type = "NOTES"
+            first_document.chapter_id = first_chapter.id
+            second_document = self._document(user.id, course.id, second_path, "text/plain")
+            second_document.document_type = "NOTES"
+            second_document.chapter_id = second_chapter.id
+            session.add_all([first_document, second_document])
+            session.flush()
+            user_id = user.id
+            course_id = course.id
+            first_chapter_id = first_chapter.id
+            second_chapter_id = second_chapter.id
+            first_document_id = first_document.id
+
+        first = create_learning_package_task(course_id, user_id, "follow", scope_chapter_id=first_chapter_id)
+        second = create_learning_package_task(course_id, user_id, "follow", scope_chapter_id=second_chapter_id)
+        first_again = create_learning_package_task(course_id, user_id, "follow", scope_chapter_id=first_chapter_id)
+
+        self.assertEqual((first.version, second.version, first_again.version), (1, 1, 2))
+        self.assertEqual(first.scope_key, f"chapter:{first_chapter_id}")
+        chapter_packages, _ = get_scoped_packages(course_id, user_id)
+        self.assertFalse(chapter_packages[str(first_chapter_id)].is_stale)
+
+        with get_db_session() as session:
+            session.get(Document, first_document_id).chapter_id = None
+
+        chapter_packages, _ = get_scoped_packages(course_id, user_id)
+        self.assertTrue(chapter_packages[str(first_chapter_id)].is_stale)
 
     def test_course_analysis_persists_results(self):
         pdf_path = Path(TEST_DIR.name) / "course.pdf"

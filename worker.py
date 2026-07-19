@@ -1,6 +1,8 @@
 import logging
+import os
 import signal
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 
@@ -58,7 +60,7 @@ def _claim_next():
         task.task_attempts += 1
         course = session.get(Course, task.course_id)
         session.flush()
-        return (task.id, task.course_id, course.user_id, task.scene, task.scope_document_id)
+        return (task.id, task.course_id, course.user_id, task.scene, task.scope_document_id, task.scope_chapter_id, task.scope_unassigned)
 
 
 def _heartbeat(task_id):
@@ -81,38 +83,50 @@ def _fail_and_refund(session, task, error_type, detail):
             session.delete(record)
 
 
+def _process_claimed(claimed):
+    task_id, course_id, user_id, scene, scope_document_id, scope_chapter_id, scope_unassigned = claimed
+    task_heartbeat = threading.Thread(target=_heartbeat, args=(task_id,), daemon=True)
+    task_heartbeat.start()
+    try:
+        analyze_course(course_id, user_id, package_id=task_id, scene=None if scene == "legacy" else scene, scope_document_id=scope_document_id, scope_chapter_id=scope_chapter_id, scope_unassigned=scope_unassigned)
+        with get_db_session() as session:
+            completed = session.get(LearningPackage, task_id)
+            entitlement_id = completed.entitlement_id if completed else None
+        if entitlement_id and scene in {"follow", "textbook", "exam"}:
+            consume_scene(entitlement_id, scene)
+        logger.info("generation_completed task_id=%s scene=%s", task_id, scene)
+    except Exception as exc:
+        logger.exception("generation_failed task_id=%s scene=%s", task_id, scene)
+        send_alert("generation_failed", "AI generation task failed", task_id=task_id, scene=scene)
+        with get_db_session() as session:
+            task = session.get(LearningPackage, task_id)
+            if task is not None:
+                if task.task_attempts >= 2:
+                    _fail_and_refund(session, task, type(exc).__name__, str(exc)[:2000])
+                else:
+                    task.status = "pending"
+                    task.current_stage = "retry_queued"
+
+
 def run():
     create_database_tables()
     _recover_stale()
-    heartbeat = threading.Thread(target=_worker_heartbeat, daemon=True)
-    heartbeat.start()
-    while not stop_event.is_set():
-        claimed = _claim_next()
-        if claimed is None:
-            stop_event.wait(2)
-            continue
-        task_id, course_id, user_id, scene, scope_document_id = claimed
-        heartbeat = threading.Thread(target=_heartbeat, args=(task_id,), daemon=True)
-        heartbeat.start()
-        try:
-            analyze_course(course_id, user_id, package_id=task_id, scene=None if scene == "legacy" else scene, scope_document_id=scope_document_id)
-            with get_db_session() as session:
-                completed = session.get(LearningPackage, task_id)
-                entitlement_id = completed.entitlement_id if completed else None
-            if entitlement_id and scene in {"follow", "textbook", "exam"}:
-                consume_scene(entitlement_id, scene)
-            logger.info("generation_completed task_id=%s scene=%s", task_id, scene)
-        except Exception as exc:
-            logger.exception("generation_failed task_id=%s scene=%s", task_id, scene)
-            send_alert("generation_failed", "AI generation task failed", task_id=task_id, scene=scene)
-            with get_db_session() as session:
-                task = session.get(LearningPackage, task_id)
-                if task is not None:
-                    if task.task_attempts >= 2:
-                        _fail_and_refund(session, task, type(exc).__name__, str(exc)[:2000])
-                    else:
-                        task.status = "pending"
-                        task.current_stage = "retry_queued"
+    worker_heartbeat = threading.Thread(target=_worker_heartbeat, daemon=True)
+    worker_heartbeat.start()
+    concurrency = max(1, min(4, int(os.getenv("LEARNING_OS_WORKER_CONCURRENCY", "2"))))
+    active = set()
+    logger.info("worker_started concurrency=%s", concurrency)
+    with ThreadPoolExecutor(max_workers=concurrency, thread_name_prefix="generation") as executor:
+        while not stop_event.is_set():
+            active = {future for future in active if not future.done()}
+            if len(active) >= concurrency:
+                stop_event.wait(0.5)
+                continue
+            claimed = _claim_next()
+            if claimed is None:
+                stop_event.wait(2)
+                continue
+            active.add(executor.submit(_process_claimed, claimed))
 
 
 if __name__ == "__main__":

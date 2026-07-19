@@ -173,6 +173,13 @@ class LearningPackageResponse(BaseModel):
     created_at: datetime
     scene: str = "legacy"
     scope_document_id: int | None = None
+    scope_chapter_id: int | None = None
+    scope_unassigned: bool = False
+    scope_kind: str = "course"
+    scope_key: str = "course"
+    source_fingerprint: str | None = None
+    prompt_version: str | None = None
+    is_stale: bool = False
 
 
 class CourseSpaceResponse(BaseModel):
@@ -181,6 +188,11 @@ class CourseSpaceResponse(BaseModel):
     learning_package: LearningPackageResponse | None
     chapters: list[ChapterResponse] = Field(default_factory=list)
     scene_packages: dict[str, LearningPackageResponse | None] = Field(default_factory=dict)
+    scene_completed_packages: dict[str, LearningPackageResponse | None] = Field(default_factory=dict)
+    chapter_packages: dict[str, LearningPackageResponse] = Field(default_factory=dict)
+    chapter_completed_packages: dict[str, LearningPackageResponse] = Field(default_factory=dict)
+    document_packages: dict[str, LearningPackageResponse] = Field(default_factory=dict)
+    document_completed_packages: dict[str, LearningPackageResponse] = Field(default_factory=dict)
 
 
 class AssistantQueryRequest(BaseModel):
@@ -189,6 +201,7 @@ class AssistantQueryRequest(BaseModel):
     scene: str | None = Field(default=None, max_length=20)
     chapter_id: int | None = None
     textbook_id: int | None = None
+    scope_unassigned: bool = False
 
     @field_validator("question")
     @classmethod
