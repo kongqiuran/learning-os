@@ -3,12 +3,25 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 
 from src.database import create_database_tables, get_db_session
+from src.billing.product_catalog import get_billing_product
 from src.models import CourseEntitlement, Document, LearningPackage, User
 from src.services.chapter_service import create_chapter, delete_chapter, move_document
 from src.services.course_service import create_course
 from src.services.entitlement_service import EntitlementQuotaExceeded, consume_assistant, consume_scene, get_active_entitlement, reserve_scene
 from src.services.quota_settlement_service import release_package_quota
 from src.services.user_service import register_user
+
+
+def entitlement_values():
+    product = get_billing_product("course_space")
+    return {
+        "product_code": product.product_code,
+        "amount_cents": product.amount_cents,
+        "follow_remaining": product.follow_allowance,
+        "textbook_remaining": product.textbook_allowance,
+        "exam_remaining": product.exam_allowance,
+        "assistant_remaining": product.assistant_allowance,
+    }
 
 
 class V2FeatureTest(unittest.TestCase):
@@ -35,7 +48,7 @@ class V2FeatureTest(unittest.TestCase):
 
     def test_course_entitlement_consumes_successful_scene_and_assistant_allowances(self):
         with get_db_session() as session:
-            item = CourseEntitlement(user_id=self.user.id, course_id=self.course.id, payment_reference="manual-test", expires_at=datetime.now(timezone.utc) + timedelta(days=90))
+            item = CourseEntitlement(user_id=self.user.id, course_id=self.course.id, payment_reference="manual-test", expires_at=datetime.now(timezone.utc) + timedelta(days=90), **entitlement_values())
             session.add(item); session.flush(); entitlement_id = item.id
         active = get_active_entitlement(self.user.id, self.course.id)
         self.assertEqual(active.id, entitlement_id)
@@ -43,12 +56,15 @@ class V2FeatureTest(unittest.TestCase):
         consume_assistant(self.user.id, self.course.id)
         with get_db_session() as session:
             stored = session.get(CourseEntitlement, entitlement_id)
-            self.assertEqual(stored.follow_remaining, 2)
-            self.assertEqual(stored.assistant_remaining, 99)
+            product = get_billing_product("course_space")
+            self.assertEqual(stored.follow_remaining, product.follow_allowance - 1)
+            self.assertEqual(stored.assistant_remaining, product.assistant_allowance - 1)
 
     def test_scene_reservation_is_atomic_when_one_allowance_remains(self):
         with get_db_session() as session:
-            item = CourseEntitlement(user_id=self.user.id, course_id=self.course.id, payment_reference="atomic-test", expires_at=datetime.now(timezone.utc) + timedelta(days=90), follow_remaining=1)
+            values = entitlement_values()
+            values["follow_remaining"] = 1
+            item = CourseEntitlement(user_id=self.user.id, course_id=self.course.id, payment_reference="atomic-test", expires_at=datetime.now(timezone.utc) + timedelta(days=90), **values)
             session.add(item); session.flush(); entitlement_id = item.id
 
         def attempt_reservation(_index):
@@ -68,7 +84,9 @@ class V2FeatureTest(unittest.TestCase):
 
     def test_package_quota_refund_is_idempotent(self):
         with get_db_session() as session:
-            item = CourseEntitlement(user_id=self.user.id, course_id=self.course.id, payment_reference="refund-test", expires_at=datetime.now(timezone.utc) + timedelta(days=90), follow_remaining=1)
+            values = entitlement_values()
+            values["follow_remaining"] = 1
+            item = CourseEntitlement(user_id=self.user.id, course_id=self.course.id, payment_reference="refund-test", expires_at=datetime.now(timezone.utc) + timedelta(days=90), **values)
             session.add(item); session.flush(); entitlement_id = item.id
         reserve_scene(entitlement_id, "follow")
         with get_db_session() as session:

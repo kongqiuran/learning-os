@@ -87,6 +87,46 @@ class CourseEntitlementResponse(BaseModel):
     assistant_remaining: int
 
 
+class BillingProductResponse(BaseModel):
+    product_code: str
+    name: str
+    description: str
+    amount_cents: int
+    currency: str
+    duration_policy: str
+    follow_allowance: int
+    textbook_allowance: int
+    exam_allowance: int
+    assistant_allowance: int
+
+
+class BillingProductListResponse(BaseModel):
+    products: list[BillingProductResponse]
+
+
+class PaymentOrderCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    course_id: int = Field(gt=0)
+    product_code: str = Field(min_length=1, max_length=40)
+    request_key: str = Field(min_length=1, max_length=120)
+
+
+class PaymentOrderResponse(BaseModel):
+    order_no: str
+    user_id: int
+    course_id: int
+    product_code: str
+    product_snapshot: dict[str, Any]
+    amount_cents: int
+    currency: str
+    status: str
+    entitlement_id: int | None
+    created_at: datetime
+    paid_at: datetime | None
+    operator_note: str | None
+
+
 class MessageResponse(BaseModel):
     message: str
 

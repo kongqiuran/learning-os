@@ -41,6 +41,7 @@ MIGRATIONS = (
             "quota_settled_at": "DATETIME",
         },
     }),
+    ("20260720_payment_orders", {}),
 )
 
 
@@ -54,6 +55,10 @@ def run_schema_migrations(engine):
             if version in applied:
                 continue
             inspector = inspect(connection)
+            if version == "20260720_payment_orders":
+                from src.models.payment_order import PaymentOrder
+
+                PaymentOrder.__table__.create(bind=connection, checkfirst=True)
             for table_name, columns in tables.items():
                 existing = {column["name"] for column in inspector.get_columns(table_name)}
                 for name, definition in columns.items():
