@@ -12,6 +12,7 @@ from src.database import get_db_session
 from src.models import Course, Document, DocumentAnalysis, LearningPackage
 from src.services.file_parser_service import extract_text, get_source_type
 from src.services.task_service import create_package_task, sync_package_task
+from src.logging_config import get_logger
 
 
 class TenantIsolationError(ValueError):
@@ -24,6 +25,7 @@ SCENE_TYPES = {
     "exam": {"EXAM", "HOMEWORK"},
 }
 PROMPT_VERSION = "follow-chapter-v1"
+logger = get_logger(__name__)
 
 
 def get_scope_metadata(scope_document_id=None, scope_chapter_id=None, scope_unassigned=False):
@@ -68,10 +70,28 @@ def analyze_course(course_id, user_id, llm_client=None, language="zh", package_i
                 course.id,
                 user_id,
                 **progress,
-            )
+            ),
+            log_context={
+                "user_id": user_id,
+                "task_id": package.task_id,
+                "document_id": None,
+                "course_id": course.id,
+                "package_id": package.id,
+                "scene": scene or "legacy",
+            },
+        )
+        _set_llm_log_context(
+            client,
+            user_id=user_id,
+            task_id=package.task_id,
+            document_id=None,
+            course_id=course.id,
+            package_id=package.id,
+            scene=scene or "legacy",
         )
         analyses = []
         for document in documents:
+            _set_llm_log_context(client, document_id=document.id)
             _update_package_progress(
                 package.id,
                 course.id,
@@ -86,8 +106,10 @@ def analyze_course(course_id, user_id, llm_client=None, language="zh", package_i
                     user_id,
                     client,
                     language,
+                    package.task_id,
                 )
             )
+        _set_llm_log_context(client, document_id=None)
         if scene == "follow" and (scope_chapter_id is not None or scope_unassigned):
             _update_package_progress(package.id, course.id, user_id, "follow_chapter_generator", 0)
             content = generate_follow_chapter_package(analyses, llm_client=client, language=language)
@@ -171,6 +193,20 @@ def analyze_course(course_id, user_id, llm_client=None, language="zh", package_i
                 error_code=error_type,
                 error_detail=error_detail,
             )
+        logger.exception(
+            "Course analysis failed.",
+            extra={
+                "event": "analysis.course.failed",
+                "user_id": user_id,
+                "task_id": package.task_id,
+                "document_id": scope_document_id,
+                "course_id": course.id,
+                "package_id": package.id,
+                "scene": scene or "legacy",
+                "stage": getattr(exc, "stage", None),
+                "exception": exc,
+            },
+        )
         raise
 
 
@@ -479,6 +515,7 @@ def _get_or_create_document_analysis(
     user_id,
     llm_client,
     language="zh",
+    task_id=None,
 ):
     with get_db_session() as session:
         stored_document = _require_scoped_document(
@@ -492,11 +529,32 @@ def _get_or_create_document_analysis(
         )
         if existing is not None:
             stored_document.processing_status = "completed"
+            logger.info(
+                "Document analysis cache hit.",
+                extra={
+                    "event": "document.parse.cache_hit",
+                    "user_id": user_id,
+                    "task_id": task_id,
+                    "document_id": document.id,
+                    "course_id": course_id,
+                },
+            )
             return _serialize_analysis(stored_document, existing)
 
         stored_document.processing_status = "processing"
 
     try:
+        started = datetime.now(timezone.utc)
+        logger.info(
+            "Document parsing started.",
+            extra={
+                "event": "document.parse.started",
+                "user_id": user_id,
+                "task_id": task_id,
+                "document_id": document.id,
+                "course_id": course_id,
+            },
+        )
         text = extract_text(document.file_path, document.mime_type)
         source_type = get_source_type(document.file_path, document.mime_type)
         result = analyze_document(
@@ -523,10 +581,21 @@ def _get_or_create_document_analysis(
             session.add(analysis)
             stored_document.processing_status = "completed"
             session.flush()
+        logger.info(
+            "Document parsing and analysis completed.",
+            extra={
+                "event": "document.parse.success",
+                "user_id": user_id,
+                "task_id": task_id,
+                "document_id": document.id,
+                "course_id": course_id,
+                "duration_ms": int((datetime.now(timezone.utc) - started).total_seconds() * 1000),
+            },
+        )
         return _serialize_analysis(document, analysis)
     except TenantIsolationError:
         raise
-    except Exception:
+    except Exception as exc:
         with get_db_session() as session:
             stored_document = _require_scoped_document(
                 session,
@@ -535,7 +604,24 @@ def _get_or_create_document_analysis(
                 user_id,
             )
             stored_document.processing_status = "failed"
+        logger.exception(
+            "Document parsing or analysis failed.",
+            extra={
+                "event": "document.parse.failed",
+                "user_id": user_id,
+                "task_id": task_id,
+                "document_id": document.id,
+                "course_id": course_id,
+                "exception": exc,
+            },
+        )
         raise
+
+
+def _set_llm_log_context(client, **context):
+    setter = getattr(client, "set_log_context", None)
+    if callable(setter):
+        setter(**context)
 
 
 def _serialize_analysis(document, analysis):

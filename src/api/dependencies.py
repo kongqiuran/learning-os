@@ -18,4 +18,5 @@ def require_current_user(request: Request):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"code": "session_expired", "message": "Your session has expired."},
         )
+    request.state.user_id = user.id
     return user

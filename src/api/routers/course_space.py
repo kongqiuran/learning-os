@@ -1,4 +1,3 @@
-import logging
 import os
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile, status
@@ -48,10 +47,11 @@ from src.services.entitlement_service import (
 )
 from src.services.quota_settlement_service import release_package_quota, settle_package_quota
 from src.services.task_service import fail_package_task
+from src.logging_config import get_logger
 
 
 router = APIRouter(prefix="/api/courses/{course_id}", tags=["course-space"])
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @router.get("/space", response_model=CourseSpaceResponse)
@@ -228,7 +228,18 @@ def query_course_assistant(
     except Exception as exc:
         if assistant_entitlement_id is not None:
             release_assistant(assistant_entitlement_id)
-        logger.exception("Course assistant query failed.")
+        logger.exception(
+            "Course assistant query failed.",
+            extra={
+                "event": "assistant.query.failed",
+                "user_id": user.id,
+                "task_id": None,
+                "document_id": payload.textbook_id,
+                "course_id": course_id,
+                "scene": payload.scene or "assistant",
+                "exception": exc,
+            },
+        )
         raise HTTPException(
             status_code=502,
             detail={"code": "assistant_unavailable", "message": "The course assistant is unavailable."},
@@ -265,7 +276,16 @@ def _run_generation_background_task(package_id, course_id, user_id, scene=None, 
             release_package_quota(session, package_id)
         logger.exception(
             "Course content generation task failed.",
-            extra={"package_id": package_id, "course_id": course_id},
+            extra={
+                "event": "background_generation.failed",
+                "user_id": user_id,
+                "task_id": package.task_id if package is not None else None,
+                "document_id": scope_document_id,
+                "package_id": package_id,
+                "course_id": course_id,
+                "scene": scene or "legacy",
+                "exception": exc,
+            },
         )
 
 

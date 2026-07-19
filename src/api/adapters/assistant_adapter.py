@@ -35,7 +35,15 @@ def answer_course_question(course_id, user_id, question, current_section=None, l
     if not context:
         return AssistantAnswer(INSUFFICIENT_CONTEXT_ANSWER, [])
 
-    client = llm_client or LLMClient()
+    client = llm_client or LLMClient(
+        log_context={
+            "user_id": user_id,
+            "course_id": course_id,
+            "task_id": None,
+            "document_id": textbook_id,
+            "scene": scene or "assistant",
+        }
+    )
     result = client.generate(
         _system_prompt(),
         json.dumps(

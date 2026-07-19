@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
 from src.models import Task
+from src.logging_config import get_logger
 
 
 PACKAGE_STATUS_TO_TASK_STATUS = {
@@ -21,6 +22,7 @@ STAGE_PROGRESS = {
     "learning_package_generator": ("content_generation", 85),
     "completed": ("completed", 100),
 }
+logger = get_logger(__name__)
 
 
 def create_package_task(session, user_id, course_id, scene):
@@ -35,6 +37,19 @@ def create_package_task(session, user_id, course_id, scene):
     )
     session.add(task)
     session.flush()
+    logger.info(
+        "Task created.",
+        extra={
+            "event": "task.created",
+            "user_id": int(user_id),
+            "task_id": task.id,
+            "document_id": None,
+            "course_id": int(course_id),
+            "scene": scene,
+            "status": task.status,
+            "stage": task.current_stage,
+        },
+    )
     return task
 
 
@@ -46,6 +61,8 @@ def sync_package_task(session, package, user_id, status=None, stage=None, error_
         package.task_id = task.id
         package.task = task
 
+    previous_status = task.status
+    previous_stage = task.current_stage
     target_status = status or PACKAGE_STATUS_TO_TASK_STATUS.get(package.status, "PENDING")
     normalized_stage, progress = _stage_details(stage or package.current_stage, target_status, task.progress)
     now = datetime.now(timezone.utc)
@@ -63,6 +80,23 @@ def sync_package_task(session, package, user_id, status=None, stage=None, error_
     task.error_code = error_code if target_status == "FAILED" else None
     task.error_detail = error_detail if target_status == "FAILED" else None
     session.flush()
+    if previous_status != task.status or previous_stage != task.current_stage:
+        log_method = logger.error if target_status == "FAILED" else logger.info
+        log_method(
+            "Task state changed.",
+            extra={
+                "event": "task.status.changed",
+                "user_id": int(user_id),
+                "task_id": task.id,
+                "document_id": package.scope_document_id,
+                "course_id": package.course_id,
+                "package_id": package.id,
+                "scene": package.scene,
+                "status": task.status,
+                "stage": task.current_stage,
+                "exception": error_detail if target_status == "FAILED" else None,
+            },
+        )
     return task
 
 

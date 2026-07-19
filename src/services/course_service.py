@@ -3,6 +3,10 @@ from sqlalchemy import delete, select
 from src.database import get_db_session
 from src.models import Course, Document
 from src.storage import delete_document_file
+from src.logging_config import get_logger
+
+
+logger = get_logger(__name__)
 
 
 def create_course(user_id, name, description=None):
@@ -23,6 +27,15 @@ def create_course(user_id, name, description=None):
     with get_db_session() as session:
         session.add(course)
         session.flush()
+
+    logger.info(
+        "Course created.",
+        extra={
+            "event": "course.create.success",
+            "user_id": int(user_id),
+            "course_id": course.id,
+        },
+    )
 
     return course
 

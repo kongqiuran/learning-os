@@ -6,6 +6,7 @@ from src.config import get_max_upload_size
 from src.database import get_db_session
 from src.models import Course, Document
 from src.storage import delete_document_file, save_document_bytes
+from src.logging_config import get_logger
 
 
 ALLOWED_FILE_TYPES = {
@@ -17,6 +18,7 @@ ALLOWED_FILE_TYPES = {
     ".md": {"text/markdown", "text/plain", "text/x-markdown"},
 }
 DOCUMENT_TYPES = {"TEXTBOOK", "SLIDES", "EXAM", "HOMEWORK", "NOTES", "OTHER"}
+logger = get_logger(__name__)
 
 
 class DocumentUploadError(ValueError):
@@ -32,39 +34,60 @@ def save_uploaded_document(user_id, course_id, uploaded_file, document_type="OTH
     original_filename = Path(getattr(uploaded_file, "name", "")).name
     extension = Path(original_filename).suffix.lower()
     mime_type = (getattr(uploaded_file, "type", "") or "").lower().strip()
-    _validate_file_type(extension, mime_type)
-    normalized_document_type = str(document_type).upper().strip()
-    if normalized_document_type not in DOCUMENT_TYPES:
-        raise DocumentUploadError("Invalid document type.")
-
-    data = uploaded_file.getvalue() if hasattr(uploaded_file, "getvalue") else uploaded_file.read()
-    file_size = len(data)
-    if file_size == 0:
-        raise DocumentUploadError("The uploaded file is empty.")
-    if file_size > get_max_upload_size():
-        raise DocumentUploadError("The uploaded file exceeds the size limit.")
-
-    _validate_file_signature(extension, data)
-    file_path, stored_filename = save_document_bytes(user_id, course_id, extension, data)
-    document = Document(
-        user_id=int(user_id),
-        course_id=int(course_id),
-        original_filename=original_filename,
-        stored_filename=stored_filename,
-        file_path=file_path,
-        mime_type=mime_type,
-        file_size=file_size,
-        processing_status="uploaded",
-        document_type=normalized_document_type,
-    )
-
     try:
+        _validate_file_type(extension, mime_type)
+        normalized_document_type = str(document_type).upper().strip()
+        if normalized_document_type not in DOCUMENT_TYPES:
+            raise DocumentUploadError("Invalid document type.")
+
+        data = uploaded_file.getvalue() if hasattr(uploaded_file, "getvalue") else uploaded_file.read()
+        file_size = len(data)
+        if file_size == 0:
+            raise DocumentUploadError("The uploaded file is empty.")
+        if file_size > get_max_upload_size():
+            raise DocumentUploadError("The uploaded file exceeds the size limit.")
+
+        _validate_file_signature(extension, data)
+        file_path, stored_filename = save_document_bytes(user_id, course_id, extension, data)
+        document = Document(
+            user_id=int(user_id),
+            course_id=int(course_id),
+            original_filename=original_filename,
+            stored_filename=stored_filename,
+            file_path=file_path,
+            mime_type=mime_type,
+            file_size=file_size,
+            processing_status="uploaded",
+            document_type=normalized_document_type,
+        )
         with get_db_session() as session:
             session.add(document)
             session.flush()
-    except Exception:
-        delete_document_file(file_path)
+    except Exception as exc:
+        if "file_path" in locals():
+            delete_document_file(file_path)
+        logger.error(
+            "Document upload failed.",
+            extra={
+                "event": "document.upload.failed",
+                "user_id": user_id,
+                "task_id": None,
+                "document_id": None,
+                "course_id": course_id,
+                "exception": exc,
+            },
+        )
         raise
+
+    logger.info(
+        "Document upload completed.",
+        extra={
+            "event": "document.upload.success",
+            "user_id": user_id,
+            "document_id": document.id,
+            "course_id": course_id,
+        },
+    )
 
     return document
 

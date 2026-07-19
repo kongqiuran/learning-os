@@ -1,4 +1,3 @@
-import logging
 import os
 import signal
 import threading
@@ -16,10 +15,11 @@ from src.config import DATA_DIR
 from src.ops import send_alert
 from src.services.quota_settlement_service import release_package_quota, settle_package_quota
 from src.services.task_service import sync_package_task
+from src.logging_config import configure_logging, get_logger
 
 
-logging.basicConfig(level=logging.INFO, format='{"time":"%(asctime)s","level":"%(levelname)s","message":"%(message)s"}')
-logger = logging.getLogger("learning_os.worker")
+configure_logging()
+logger = get_logger("learning_os.worker")
 stop_event = threading.Event()
 
 
@@ -90,9 +90,11 @@ def _claim_next():
         if course is None:
             return None
         package = session.get(LearningPackage, claimed.id)
+        lifecycle_task_id = None
         if package is not None:
-            sync_package_task(session, package, course.user_id, status="RUNNING", stage="starting")
-        return (claimed.id, claimed.course_id, course.user_id, claimed.scene, claimed.scope_document_id, claimed.scope_chapter_id, claimed.scope_unassigned)
+            lifecycle_task = sync_package_task(session, package, course.user_id, status="RUNNING", stage="starting")
+            lifecycle_task_id = lifecycle_task.id
+        return (claimed.id, claimed.course_id, course.user_id, claimed.scene, claimed.scope_document_id, claimed.scope_chapter_id, claimed.scope_unassigned, lifecycle_task_id)
 
 
 def _heartbeat(task_id):
@@ -119,16 +121,28 @@ def _fail_and_refund(session, task, error_type, detail):
 
 
 def _process_claimed(claimed):
-    task_id, course_id, user_id, scene, scope_document_id, scope_chapter_id, scope_unassigned = claimed
-    task_heartbeat = threading.Thread(target=_heartbeat, args=(task_id,), daemon=True)
+    package_id, course_id, user_id, scene, scope_document_id, scope_chapter_id, scope_unassigned, task_id = claimed
+    task_heartbeat = threading.Thread(target=_heartbeat, args=(package_id,), daemon=True)
     task_heartbeat.start()
     try:
-        analyze_course(course_id, user_id, package_id=task_id, scene=None if scene == "legacy" else scene, scope_document_id=scope_document_id, scope_chapter_id=scope_chapter_id, scope_unassigned=scope_unassigned)
+        analyze_course(course_id, user_id, package_id=package_id, scene=None if scene == "legacy" else scene, scope_document_id=scope_document_id, scope_chapter_id=scope_chapter_id, scope_unassigned=scope_unassigned)
     except Exception as exc:
-        logger.exception("generation_failed task_id=%s scene=%s", task_id, scene)
-        send_alert("generation_failed", "AI generation task failed", task_id=task_id, scene=scene)
+        logger.exception(
+            "AI generation task failed.",
+            extra={
+                "event": "worker.generation.failed",
+                "user_id": user_id,
+                "task_id": task_id,
+                "document_id": scope_document_id,
+                "course_id": course_id,
+                "package_id": package_id,
+                "scene": scene,
+                "exception": exc,
+            },
+        )
+        send_alert("generation_failed", "AI generation task failed", task_id=package_id, scene=scene)
         with get_db_session() as session:
-            task = session.get(LearningPackage, task_id)
+            task = session.get(LearningPackage, package_id)
             if task is not None:
                 if task.task_attempts >= 2:
                     _fail_and_refund(session, task, type(exc).__name__, str(exc)[:2000])
@@ -140,11 +154,35 @@ def _process_claimed(claimed):
 
     try:
         with get_db_session() as session:
-            settle_package_quota(session, task_id)
-    except Exception:
-        logger.exception("quota_settlement_failed task_id=%s scene=%s", task_id, scene)
-        send_alert("quota_settlement_failed", "AI generation completed but quota settlement failed", task_id=task_id, scene=scene)
-    logger.info("generation_completed task_id=%s scene=%s", task_id, scene)
+            settle_package_quota(session, package_id)
+    except Exception as exc:
+        logger.exception(
+            "Quota settlement failed.",
+            extra={
+                "event": "worker.quota_settlement.failed",
+                "user_id": user_id,
+                "task_id": task_id,
+                "document_id": scope_document_id,
+                "course_id": course_id,
+                "package_id": package_id,
+                "scene": scene,
+                "exception": exc,
+            },
+        )
+        send_alert("quota_settlement_failed", "AI generation completed but quota settlement failed", task_id=package_id, scene=scene)
+    logger.info(
+        "AI generation task completed.",
+        extra={
+            "event": "worker.generation.success",
+            "user_id": user_id,
+            "task_id": task_id,
+            "document_id": scope_document_id,
+            "course_id": course_id,
+            "package_id": package_id,
+            "scene": scene,
+            "status": "SUCCESS",
+        },
+    )
 
 
 def run():
@@ -155,7 +193,10 @@ def run():
     concurrency = max(1, min(4, int(os.getenv("LEARNING_OS_WORKER_CONCURRENCY", "2"))))
     active = set()
     last_recovery = time.monotonic()
-    logger.info("worker_started concurrency=%s", concurrency)
+    logger.info(
+        "Worker started.",
+        extra={"event": "worker.started", "status": "RUNNING"},
+    )
     with ThreadPoolExecutor(max_workers=concurrency, thread_name_prefix="generation") as executor:
         while not stop_event.is_set():
             if time.monotonic() - last_recovery >= 30:

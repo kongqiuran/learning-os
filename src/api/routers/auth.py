@@ -8,9 +8,11 @@ from src.services.user_service import (
     authenticate_user,
     register_user,
 )
+from src.logging_config import get_logger
 
 
 router = APIRouter(prefix="/api/auth", tags=["authentication"])
+logger = get_logger(__name__)
 
 
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
@@ -28,22 +30,39 @@ def register(payload: RegisterRequest, request: Request):
     try:
         user = register_user(payload.email, payload.password, accept_privacy=True)
     except UserAlreadyExistsError as exc:
+        logger.warning(
+            "Registration rejected because the account already exists.",
+            extra={"event": "auth.register.rejected", "exception": exc},
+        )
         raise HTTPException(
             status_code=409,
             detail={"code": "email_registered", "message": "This email is already registered."},
         ) from exc
     except InvalidPasswordError as exc:
+        logger.warning(
+            "Registration rejected because the password policy was not met.",
+            extra={"event": "auth.register.rejected", "exception": exc},
+        )
         raise HTTPException(
             status_code=400,
             detail={"code": "weak_password", "message": str(exc)},
         ) from exc
     except ValueError as exc:
+        logger.warning(
+            "Registration rejected because the request was invalid.",
+            extra={"event": "auth.register.rejected", "exception": exc},
+        )
         raise HTTPException(
             status_code=400,
             detail={"code": "invalid_registration", "message": str(exc)},
         ) from exc
 
     request.session["user_email"] = user.email
+    request.state.user_id = user.id
+    logger.info(
+        "User registration completed.",
+        extra={"event": "auth.register.success", "user_id": user.id},
+    )
     return AuthResponse(user=user)
 
 
@@ -51,11 +70,20 @@ def register(payload: RegisterRequest, request: Request):
 def login(payload: LoginRequest, request: Request):
     user = authenticate_user(payload.email, payload.password)
     if user is None:
+        logger.warning(
+            "Login rejected because credentials were invalid.",
+            extra={"event": "auth.login.rejected"},
+        )
         raise HTTPException(
             status_code=401,
             detail={"code": "invalid_credentials", "message": "The email or password is incorrect."},
         )
     request.session["user_email"] = user.email
+    request.state.user_id = user.id
+    logger.info(
+        "User login completed.",
+        extra={"event": "auth.login.success", "user_id": user.id},
+    )
     return AuthResponse(user=user)
 
 
