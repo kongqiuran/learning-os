@@ -1,7 +1,6 @@
 import logging
 import signal
 import threading
-import time
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 
@@ -22,6 +21,14 @@ stop_event = threading.Event()
 
 def _stop(*_args):
     stop_event.set()
+
+
+def _worker_heartbeat():
+    heartbeat_path = Path(DATA_DIR) / "database" / "worker-heartbeat"
+    heartbeat_path.parent.mkdir(parents=True, exist_ok=True)
+    while not stop_event.is_set():
+        heartbeat_path.touch()
+        stop_event.wait(15)
 
 
 def _recover_stale():
@@ -77,10 +84,9 @@ def _fail_and_refund(session, task, error_type, detail):
 def run():
     create_database_tables()
     _recover_stale()
+    heartbeat = threading.Thread(target=_worker_heartbeat, daemon=True)
+    heartbeat.start()
     while not stop_event.is_set():
-        heartbeat_path = Path(DATA_DIR) / "database" / "worker-heartbeat"
-        heartbeat_path.parent.mkdir(parents=True, exist_ok=True)
-        heartbeat_path.touch()
         claimed = _claim_next()
         if claimed is None:
             stop_event.wait(2)
