@@ -10,10 +10,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import boto3
+from boto3.s3.transfer import TransferConfig
 
 from src.config import DATA_DIR, UPLOAD_DIR
 from src.database.connection import DATABASE_URL
 from src.ops import send_alert
+
+GIB = 1024 * 1024 * 1024
 
 
 def sha256(path):
@@ -44,8 +47,23 @@ def main():
             if UPLOAD_DIR.exists(): tar.add(UPLOAD_DIR, arcname="uploads")
         checksum = sha256(archive)
         key = f"{prefix}/daily/{archive.name}"
+
         client = boto3.client("s3", endpoint_url=endpoint)
-        client.upload_file(str(archive), bucket, key, ExtraArgs={"Metadata": {"sha256": checksum}, "ServerSideEncryption": "AES256"})
+        config = TransferConfig(
+            multipart_threshold=GIB,
+            multipart_chunksize=GIB,
+        )
+
+        client.upload_file(
+            str(archive),
+            bucket,
+            key,
+            ExtraArgs={
+                "Metadata": {"sha256": checksum},
+                "ServerSideEncryption": "AES256",
+            },
+            Config=config,
+        )
         head = client.head_object(Bucket=bucket, Key=key)
         if head.get("Metadata", {}).get("sha256") != checksum:
             raise RuntimeError("Backup checksum metadata verification failed.")
