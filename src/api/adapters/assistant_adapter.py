@@ -7,7 +7,7 @@ from src.ai.llm_client import LLMClient
 from src.ai.prompt_manager import STRUCTURED_OUTPUT_RULES
 from src.config import get_assistant_max_context_chars
 from src.database import get_db_session
-from src.models import Document, DocumentAnalysis
+from src.models import Course, Document, DocumentAnalysis
 from src.services.analysis_service import get_learning_package
 
 
@@ -103,9 +103,11 @@ def _load_document_analyses(course_id, user_id):
         statement = (
             select(Document, DocumentAnalysis)
             .join(DocumentAnalysis, DocumentAnalysis.document_id == Document.id)
+            .join(Course, Document.course_id == Course.id)
             .where(
                 Document.course_id == int(course_id),
                 Document.user_id == int(user_id),
+                Course.user_id == int(user_id),
             )
             .order_by(DocumentAnalysis.created_at.desc(), DocumentAnalysis.id.desc())
         )

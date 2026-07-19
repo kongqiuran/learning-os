@@ -76,9 +76,11 @@ def list_documents_for_course(user_id, course_id):
     with get_db_session() as session:
         statement = (
             select(Document)
+            .join(Course, Document.course_id == Course.id)
             .where(
                 Document.user_id == int(user_id),
                 Document.course_id == int(course_id),
+                Course.user_id == int(user_id),
             )
             .order_by(Document.uploaded_at.desc(), Document.id.desc())
         )

@@ -10,6 +10,10 @@ from src.models import Course, Document, DocumentAnalysis, LearningPackage
 from src.services.file_parser_service import extract_text, get_source_type
 
 
+class TenantIsolationError(ValueError):
+    """Raised when a background task's resource ownership tuple is invalid."""
+
+
 def analyze_course(course_id, user_id, llm_client=None, language="zh", package_id=None):
     course, documents = _load_course_documents(course_id, user_id)
     if course is None:
@@ -19,37 +23,62 @@ def analyze_course(course_id, user_id, llm_client=None, language="zh", package_i
     _validate_document_course_binding(course_id, documents)
 
     package = (
-        _start_existing_package(package_id, course.id)
+        _start_existing_package(package_id, course.id, user_id)
         if package_id is not None
-        else _create_package(course.id, "processing")
+        else _create_package(course.id, user_id, "processing")
     )
     try:
         client = llm_client or LLMClient(
             progress_callback=lambda **progress: _update_package_progress(
                 package.id,
+                course.id,
+                user_id,
                 **progress,
             )
         )
         analyses = []
         for document in documents:
-            _update_package_progress(package.id, "document_analyzer", 0)
-            analyses.append(
-                _get_or_create_document_analysis(document, client, language)
+            _update_package_progress(
+                package.id,
+                course.id,
+                user_id,
+                "document_analyzer",
+                0,
             )
-        _update_package_progress(package.id, "course_analyzer", 0)
+            analyses.append(
+                _get_or_create_document_analysis(
+                    document,
+                    course.id,
+                    user_id,
+                    client,
+                    language,
+                )
+            )
+        _update_package_progress(package.id, course.id, user_id, "course_analyzer", 0)
         course_analysis = analyze_course_documents(
             analyses,
             llm_client=client,
             language=language,
         )
-        _update_package_progress(package.id, "learning_package_generator", 0)
+        _update_package_progress(
+            package.id,
+            course.id,
+            user_id,
+            "learning_package_generator",
+            0,
+        )
         content = generate_learning_package(
             course_analysis,
             llm_client=client,
             language=language,
         )
         with get_db_session() as session:
-            stored_package = session.get(LearningPackage, package.id)
+            stored_package = _require_scoped_package(
+                session,
+                package.id,
+                course.id,
+                user_id,
+            )
             stored_package.status = "completed"
             stored_package.content_json = content
             stored_package.current_stage = "completed"
@@ -61,31 +90,37 @@ def analyze_course(course_id, user_id, llm_client=None, language="zh", package_i
         package.error_type = None
         package.error_detail = None
         return package
+    except TenantIsolationError:
+        raise
     except Exception as exc:
         error_type = getattr(exc, "error_type", type(exc).__name__)
         error_detail = _format_error_detail(exc)
         with get_db_session() as session:
-            stored_package = session.get(LearningPackage, package.id)
-            if stored_package is not None:
-                stored_package.status = "failed"
-                stored_package.current_stage = getattr(
-                    exc,
-                    "stage",
-                    stored_package.current_stage or "unknown",
-                )
-                stored_package.retry_count = getattr(
-                    exc,
-                    "retry_count",
-                    stored_package.retry_count or 0,
-                )
-                stored_package.error_type = error_type
-                stored_package.error_detail = error_detail
-                stored_package.content_json = {
-                    "error": {
-                        "code": "generation_failed",
-                        "message": "Course content generation failed.",
-                    }
+            stored_package = _require_scoped_package(
+                session,
+                package.id,
+                course.id,
+                user_id,
+            )
+            stored_package.status = "failed"
+            stored_package.current_stage = getattr(
+                exc,
+                "stage",
+                stored_package.current_stage or "unknown",
+            )
+            stored_package.retry_count = getattr(
+                exc,
+                "retry_count",
+                stored_package.retry_count or 0,
+            )
+            stored_package.error_type = error_type
+            stored_package.error_detail = error_detail
+            stored_package.content_json = {
+                "error": {
+                    "code": "generation_failed",
+                    "message": "Course content generation failed.",
                 }
+            }
         raise
 
 
@@ -123,7 +158,7 @@ def create_learning_package_task(course_id, user_id):
     if not documents:
         raise ValueError("Upload at least one supported document before generating a learning package.")
     _validate_document_course_binding(course_id, documents)
-    return _create_package(course.id, "pending")
+    return _create_package(course.id, user_id, "pending")
 
 
 def _validate_document_course_binding(course_id, documents):
@@ -141,9 +176,11 @@ def _load_course_documents(course_id, user_id):
         documents = list(
             session.scalars(
                 select(Document)
+                .join(Course, Document.course_id == Course.id)
                 .where(
                     Document.course_id == int(course_id),
                     Document.user_id == int(user_id),
+                    Course.user_id == int(user_id),
                 )
                 .order_by(Document.id)
             )
@@ -151,8 +188,9 @@ def _load_course_documents(course_id, user_id):
         return course, documents
 
 
-def _create_package(course_id, status):
+def _create_package(course_id, user_id, status):
     with get_db_session() as session:
+        _require_scoped_course(session, course_id, user_id)
         latest_version = session.scalar(
             select(func.max(LearningPackage.version)).where(LearningPackage.course_id == course_id)
         )
@@ -169,16 +207,9 @@ def _create_package(course_id, status):
     return package
 
 
-def _start_existing_package(package_id, course_id):
+def _start_existing_package(package_id, course_id, user_id):
     with get_db_session() as session:
-        package = session.scalar(
-            select(LearningPackage).where(
-                LearningPackage.id == int(package_id),
-                LearningPackage.course_id == int(course_id),
-            )
-        )
-        if package is None:
-            raise ValueError("The generation task was not found.")
+        package = _require_scoped_package(session, package_id, course_id, user_id)
         if package.status not in {"pending", "processing"}:
             raise ValueError("The generation task is not active.")
         package.status = "processing"
@@ -190,13 +221,63 @@ def _start_existing_package(package_id, course_id):
     return package
 
 
-def _update_package_progress(package_id, stage, retry_count):
+def _update_package_progress(package_id, course_id, user_id, stage, retry_count):
     with get_db_session() as session:
-        package = session.get(LearningPackage, int(package_id))
-        if package is None:
-            return
+        package = _require_scoped_package(session, package_id, course_id, user_id)
         package.current_stage = stage
         package.retry_count = int(retry_count)
+
+
+def _require_scoped_course(session, course_id, user_id):
+    course = session.scalar(
+        select(Course).where(
+            Course.id == int(course_id),
+            Course.user_id == int(user_id),
+        )
+    )
+    if course is None:
+        raise TenantIsolationError(
+            "Tenant isolation check failed for course "
+            f"(course_id={course_id}, user_id={user_id})."
+        )
+    return course
+
+
+def _require_scoped_package(session, package_id, course_id, user_id):
+    package = session.scalar(
+        select(LearningPackage)
+        .join(Course, LearningPackage.course_id == Course.id)
+        .where(
+            LearningPackage.id == int(package_id),
+            LearningPackage.course_id == int(course_id),
+            Course.user_id == int(user_id),
+        )
+    )
+    if package is None:
+        raise TenantIsolationError(
+            "Tenant isolation check failed for learning package "
+            f"(package_id={package_id}, course_id={course_id}, user_id={user_id})."
+        )
+    return package
+
+
+def _require_scoped_document(session, document_id, course_id, user_id):
+    document = session.scalar(
+        select(Document)
+        .join(Course, Document.course_id == Course.id)
+        .where(
+            Document.id == int(document_id),
+            Document.course_id == int(course_id),
+            Document.user_id == int(user_id),
+            Course.user_id == int(user_id),
+        )
+    )
+    if document is None:
+        raise TenantIsolationError(
+            "Tenant isolation check failed for document "
+            f"(document_id={document_id}, course_id={course_id}, user_id={user_id})."
+        )
+    return document
 
 
 def _format_error_detail(exc):
@@ -207,13 +288,25 @@ def _format_error_detail(exc):
     return detail[:4000]
 
 
-def _get_or_create_document_analysis(document, llm_client, language="zh"):
+def _get_or_create_document_analysis(
+    document,
+    course_id,
+    user_id,
+    llm_client,
+    language="zh",
+):
     with get_db_session() as session:
+        stored_document = _require_scoped_document(
+            session,
+            document.id,
+            course_id,
+            user_id,
+        )
         existing = session.scalar(
             select(DocumentAnalysis).where(DocumentAnalysis.document_id == document.id)
         )
         if existing is not None:
-            return _serialize_analysis(document, existing)
+            return _serialize_analysis(stored_document, existing)
 
     try:
         text = extract_text(document.file_path, document.mime_type)
@@ -233,16 +326,27 @@ def _get_or_create_document_analysis(document, llm_client, language="zh"):
             analysis_json=result,
         )
         with get_db_session() as session:
+            stored_document = _require_scoped_document(
+                session,
+                document.id,
+                course_id,
+                user_id,
+            )
             session.add(analysis)
-            stored_document = session.get(Document, document.id)
             stored_document.processing_status = "completed"
             session.flush()
         return _serialize_analysis(document, analysis)
+    except TenantIsolationError:
+        raise
     except Exception:
         with get_db_session() as session:
-            stored_document = session.get(Document, document.id)
-            if stored_document is not None:
-                stored_document.processing_status = "failed"
+            stored_document = _require_scoped_document(
+                session,
+                document.id,
+                course_id,
+                user_id,
+            )
+            stored_document.processing_status = "failed"
         raise
 
 
