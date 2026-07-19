@@ -24,13 +24,7 @@
       cd ~/learning-os
       ```
 
-   3. 检查并拉取最新代码：
-
-      ```bash
-      git status
-      ```
-
-      如果显示 `Your branch is up to date with 'origin/main'`，说明服务器代码已经同步；否则继续拉取：
+   3. 拉取最新代码：
 
       ```bash
       git pull origin main
