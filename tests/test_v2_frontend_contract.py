@@ -25,6 +25,14 @@ class V2FrontendContractTest(unittest.TestCase):
         self.assertIn("exam: ['EXAM', 'HOMEWORK']", categories)
         self.assertIn("allowedDocumentTypes.includes", dialog)
 
+    def test_chapter_creation_keeps_unassigned_materials_visible(self):
+        page = (ROOT / "pages" / "CourseSpacePage.tsx").read_text(encoding="utf-8")
+        self.assertIn("const hasUnassignedDocuments", page)
+        self.assertIn("setSelectedChapterId(hasUnassignedDocuments ? null", page)
+        self.assertIn("{unassignedDocumentCount} 份资料", page)
+        create_mutation = page.split("const createChapter = useMutation", 1)[1].split("const updateChapter", 1)[0]
+        self.assertNotIn("setSelectedChapterId(chapter.id)", create_mutation)
+
     def test_failed_generation_has_retry_and_section_question_opens_assistant(self):
         package = (ROOT / "components" / "course" / "LearningPackageView.tsx").read_text(encoding="utf-8")
         page = (ROOT / "pages" / "CourseSpacePage.tsx").read_text(encoding="utf-8")

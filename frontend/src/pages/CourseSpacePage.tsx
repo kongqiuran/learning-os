@@ -69,7 +69,10 @@ export function CourseSpacePage({ scene }: { scene: Scene }) {
 
   useEffect(() => {
     if (selectedChapterId === undefined && courseSpace.data) {
-      setSelectedChapterId(courseSpace.data.chapters[0]?.id ?? null)
+      const hasUnassignedDocuments = courseSpace.data.documents.some(
+        (item) => ['SLIDES', 'HOMEWORK', 'OTHER', 'NOTES'].includes(item.document_type) && item.chapter_id == null,
+      )
+      setSelectedChapterId(hasUnassignedDocuments ? null : (courseSpace.data.chapters[0]?.id ?? null))
     }
   }, [courseSpace.data, selectedChapterId])
 
@@ -90,8 +93,7 @@ export function CourseSpacePage({ scene }: { scene: Scene }) {
   const refresh = () => queryClient.invalidateQueries({ queryKey: courseSpaceQueryKey(courseId) })
   const createChapter = useMutation({
     mutationFn: (title: string) => api.createChapter(courseId!, title),
-    onSuccess: async (chapter) => {
-      setSelectedChapterId(chapter.id)
+    onSuccess: async () => {
       setChapterEditor(null)
       await refresh()
     },
@@ -139,6 +141,9 @@ export function CourseSpacePage({ scene }: { scene: Scene }) {
   const selectedChapter = chapters.find((item) => item.id === selectedChapterId) ?? null
   const normalizedChapterId = selectedChapterId ?? null
   const filteredDocuments = filterDocuments(documents, scene, normalizedChapterId)
+  const unassignedDocumentCount = documents.filter(
+    (item) => ['SLIDES', 'HOMEWORK', 'OTHER', 'NOTES'].includes(item.document_type) && item.chapter_id == null,
+  ).length
   const textbooks = documents.filter((item) => item.document_type === 'TEXTBOOK')
 
   function openAssistant(question = '') {
@@ -181,7 +186,10 @@ export function CourseSpacePage({ scene }: { scene: Scene }) {
               <h2 className="font-semibold text-stone-900">章节</h2>
               <button className="rounded-lg p-2 text-teal-700 hover:bg-teal-50" onClick={() => setChapterEditor({ mode: 'create' })} aria-label="添加章节"><Plus className="size-4" /></button>
             </div>
-            <button className={`mt-4 w-full rounded-xl px-3 py-2 text-left text-sm ${selectedChapterId === null ? 'bg-teal-50 text-teal-800' : 'text-stone-600 hover:bg-stone-50'}`} onClick={() => setSelectedChapterId(null)}>未分章节</button>
+            <button className={`mt-4 flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm ${selectedChapterId === null ? 'bg-teal-50 text-teal-800' : 'text-stone-600 hover:bg-stone-50'}`} onClick={() => setSelectedChapterId(null)}>
+              <span>未分章节</span>
+              <span className="text-xs text-stone-400">{unassignedDocumentCount} 份资料</span>
+            </button>
             <div className="mt-1 space-y-1">
               {chapters.map((chapter, index) => (
                 <div className={`group flex items-center rounded-xl ${chapter.id === selectedChapterId ? 'bg-teal-50' : 'hover:bg-stone-50'}`} key={chapter.id}>
