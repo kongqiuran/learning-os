@@ -11,7 +11,7 @@ import {
   UserRound,
 } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
@@ -54,17 +54,8 @@ export function SettingsPage() {
     deleteAccount.mutate()
   }
 
-  function handleOpenPrivacyPolicy() {
-    if (privacyUrl) {
-      window.open(privacyUrl, '_blank', 'noopener,noreferrer')
-      return
-    }
-    window.alert('当前协议版本已接入，正式协议正文将在商业化上线前发布。')
-  }
-
   const aiUsage = usage.data?.ai_generations
   const aiPercentage = aiUsage ? Math.round((aiUsage.used / aiUsage.limit) * 100) : 0
-  const privacyUrl = import.meta.env.VITE_PRIVACY_POLICY_URL as string | undefined
 
   return (
     <section className="max-w-5xl">
@@ -154,14 +145,20 @@ export function SettingsPage() {
                 </p>
               </div>
             </div>
-            <Button className="mt-5" variant="secondary" onClick={handleOpenPrivacyPolicy}>
-              <FileText className="size-4" /> 查看隐私协议
-            </Button>
-            {!privacyUrl ? (
-              <p className="mt-4 rounded-xl bg-slate-50 px-3 py-2.5 text-xs leading-5 text-slate-500">
-                协议版本入口已接入，正式协议正文将在商业化上线前配置。
-              </p>
-            ) : null}
+            <div className="mt-5 flex flex-wrap gap-3">
+              <Link
+                className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:border-slate-300 hover:bg-slate-50"
+                to="/legal/privacy"
+              >
+                <FileText className="size-4" /> 查看隐私政策
+              </Link>
+              <Link
+                className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:border-slate-300 hover:bg-slate-50"
+                to="/legal/terms"
+              >
+                <FileText className="size-4" /> 查看用户协议
+              </Link>
+            </div>
           </Card>
         </div>
       </div>
