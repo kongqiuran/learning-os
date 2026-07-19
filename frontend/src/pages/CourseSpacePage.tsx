@@ -22,12 +22,40 @@ export function CourseSpacePage() {
   const generationTask = useGenerationTask(courseId, generationTaskId)
   const latestLearningPackage = courseSpace.data?.learning_package
 
+  debugCourseSpace('render', {
+    courseId,
+    hasCourseSpaceData: Boolean(courseSpace.data),
+    courseSpaceIsPending: courseSpace.isPending,
+    courseSpaceIsFetching: courseSpace.isFetching,
+    courseSpaceIsError: courseSpace.isError,
+    learningPackageId: latestLearningPackage?.id ?? null,
+    learningPackageStatus: latestLearningPackage?.status ?? null,
+    generationTaskId,
+    generationTaskStatus: generationTask.data?.status ?? null,
+  })
+
+  useEffect(() => {
+    debugCourseSpace('route active', { courseId })
+    return () => debugCourseSpace('route inactive', { courseId })
+  }, [courseId])
+
+  useEffect(() => {
+    debugCourseSpace('generation task changed', {
+      generationTaskId,
+      generationTaskStatus: generationTask.data?.status ?? null,
+    })
+  }, [generationTask.data?.status, generationTaskId])
+
   useEffect(() => {
     if (
       generationTaskId === null &&
       latestLearningPackage &&
       (latestLearningPackage.status === 'pending' || latestLearningPackage.status === 'processing')
     ) {
+      debugCourseSpace('set generation task id', {
+        generationTaskId: latestLearningPackage.id,
+        learningPackageStatus: latestLearningPackage.status,
+      })
       setGenerationTaskId(latestLearningPackage.id)
     }
   }, [generationTaskId, latestLearningPackage])
@@ -36,10 +64,20 @@ export function CourseSpacePage() {
     const task = generationTask.data
     const isTerminal = task?.status === 'completed' || task?.status === 'failed'
     const courseSpaceHasTask = latestLearningPackage?.id === task?.id && latestLearningPackage?.status === task?.status
+    if (isTerminal) {
+      debugCourseSpace('generation terminal observed', {
+        generationTaskId,
+        generationTaskStatus: task.status,
+        courseSpacePackageId: latestLearningPackage?.id ?? null,
+        courseSpacePackageStatus: latestLearningPackage?.status ?? null,
+        courseSpaceHasTask,
+      })
+    }
     if (isTerminal && courseSpaceHasTask) {
+      debugCourseSpace('clear generation task id', { generationTaskId })
       setGenerationTaskId(null)
     }
-  }, [generationTask.data, latestLearningPackage])
+  }, [generationTask.data, generationTaskId, latestLearningPackage])
 
   if (!courseSpace.data) {
     if (courseSpace.isPending) {
@@ -120,4 +158,14 @@ export function CourseSpacePage() {
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(value))
+}
+
+function debugCourseSpace(event: string, state: Record<string, unknown>) {
+  if (isCourseSpaceDebugEnabled()) {
+    console.log(`[CourseSpacePage] ${event}`, { timestamp: new Date().toISOString(), ...state })
+  }
+}
+
+function isCourseSpaceDebugEnabled() {
+  return import.meta.env.DEV || window.localStorage.getItem('learning-os:debug-course-space') === '1'
 }

@@ -72,9 +72,15 @@ export function useGenerationTask(courseId: string | undefined, packageId: numbe
       return
     }
 
+    debugGenerationTask('cache update', {
+      courseId,
+      generationTaskId: task.id,
+      generationTaskStatus: task.status,
+    })
     queryClient.setQueryData<CourseSpaceResponse>(courseSpaceQueryKey(courseId), (current) =>
       current ? { ...current, learning_package: task } : current,
     )
+    debugGenerationTask('invalidate course space', { courseId, generationTaskId: task.id })
     void queryClient.invalidateQueries({ queryKey: courseSpaceQueryKey(courseId) })
   }, [courseId, generationTask.data, queryClient])
 
@@ -85,4 +91,14 @@ export function useCourseAssistant(courseId: string | undefined) {
   return useMutation({
     mutationFn: (input: AssistantQueryInput) => api.queryCourseAssistant(courseId!, input),
   })
+}
+
+function debugGenerationTask(event: string, state: Record<string, unknown>) {
+  if (isCourseSpaceDebugEnabled()) {
+    console.log(`[useGenerationTask] ${event}`, { timestamp: new Date().toISOString(), ...state })
+  }
+}
+
+function isCourseSpaceDebugEnabled() {
+  return import.meta.env.DEV || window.localStorage.getItem('learning-os:debug-course-space') === '1'
 }
