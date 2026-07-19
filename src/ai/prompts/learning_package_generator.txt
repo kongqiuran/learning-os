@@ -61,7 +61,9 @@ study_strategy
  "summary":"",
  "key_concepts":[],
  "important_formulas":[],
- "common_question_types":[]
+ "common_question_types":[],
+ "learning_order":"",
+ "common_mistakes":[]
 }
 
 
@@ -69,6 +71,8 @@ study_strategy
 
 - 说明本模块学习目的
 - 指出考试价值
+- 给出从概念、公式到应用的学习顺序
+- 列出容易混淆或失分的具体错误
 - 不要编造教材章节编号
 
 
@@ -116,9 +120,18 @@ study_strategy
   "formula":"",
   "meaning":"",
   "usage":"",
-  "common_error":""
+  "variables":"",
+  "example_application":"",
+  "common_error":"",
+  "question_type":""
  }
 ]
+
+要求：
+
+- 覆盖课程分析中全部考试相关的重要公式、性质、规则和判定条件
+- 说明变量含义、适用条件、具体应用和对应题型
+- 合并重复项，但不要以“代表公式”为理由遗漏不同用途的规则
 
 
 ====================
@@ -135,10 +148,14 @@ study_strategy
  {
   "topic":"",
   "importance":1-5,
-  "explanation":"",
+  "core_explanation":"",
   "must_master":[],
+  "formulas_or_rules":[],
   "question_types":[],
-  "common_errors":[]
+  "common_errors":[],
+  "memory_tips":"",
+  "study_advice":"",
+  "evidence":[]
  }
 ]
 
@@ -151,6 +168,17 @@ study_strategy
 - 容易失分点
 - 综合题相关知识
 
+每个考点必须说明：
+
+- core_explanation：知识点是什么、解决什么问题、为什么会进入考试以及与其他知识的联系
+- must_master：必须掌握的定义、结论、方法和判断条件
+- formulas_or_rules：必须会选择和使用的公式、性质或规则
+- question_types：具体题型及典型设问方式
+- common_errors：具体失分方式以及正确做法
+- memory_tips：准确、可验证的记忆提示
+- study_advice：复习顺序、练习深度和可检查的达标标准
+- evidence：来自课程分析的依据；无法确认具体来源时使用“来源于课程资料分析”
+
 
 ====================
 
@@ -160,7 +188,9 @@ study_strategy
 
 不要生成大量题库。
 
-每个主要模块生成1-2题即可。
+每个主要模块至少生成 1-2 题，总计至少 7 题。
+
+题目必须覆盖基础理解题、计算题和综合题，并与 exam_focus 中的考点对应。
 
 格式：
 
@@ -170,7 +200,9 @@ study_strategy
   "answer":"",
   "explanation":"",
   "knowledge_point":"",
-  "difficulty":"基础/中等/困难"
+  "question_type":"基础理解题/计算题/综合题",
+  "difficulty":"基础/中等/困难",
+  "common_trap":""
  }
 ]
 
@@ -212,6 +244,7 @@ study_strategy
 格式：
 
 {
+ "priority_order":[],
  "before_exam_focus":[],
  "avoid_wasting_time":[],
  "recommended_schedule":""
@@ -220,7 +253,7 @@ study_strategy
 
 要求：
 
-根据资料情况给出合理建议。
+根据资料情况给出合理建议。priority_order 必须与 exam_focus 的重要程度一致；recommended_schedule 必须给出可执行的复习安排。
 
 ====================
 
