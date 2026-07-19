@@ -18,6 +18,20 @@
       ssh learning@124.156.171.38
       ```
 
+      如果确认服务器仍在运行，但 SSH 无法连接，要明确提醒用户这是“情况 4：服务器 SSH 服务挂了”。此时需要用户登录云服务商控制台，使用 VNC 或网页终端执行：
+
+      ```bash
+      systemctl status ssh
+      ```
+
+      如果 SSH 服务异常，执行：
+
+      ```bash
+      systemctl restart ssh
+      ```
+
+      如果当前控制台用户权限不足，在命令前添加 `sudo`。
+
    2. 进入服务器项目目录：
 
       ```bash
