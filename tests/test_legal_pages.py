@@ -24,7 +24,6 @@ class LegalPagesContractTest(unittest.TestCase):
     def test_legal_content_contains_current_version_and_required_sections(self):
         content = (FRONTEND_SOURCE / "legal" / "legalContent.ts").read_text(encoding="utf-8")
 
-        self.assertIn("2026.07.01-v1", content)
         self.assertIn("Learning OS 隐私政策", content)
         self.assertIn("Learning OS 用户协议", content)
         for section in ("信息使用目的", "AI 服务与第三方处理", "你的权利", "账号注销与终止", "套餐与额度"):
@@ -32,6 +31,7 @@ class LegalPagesContractTest(unittest.TestCase):
 
         page = (FRONTEND_SOURCE / "pages" / "LegalPage.tsx").read_text(encoding="utf-8")
         self.assertRegex(page, re.compile(r"<MarkdownContent>\{document\.content\}</MarkdownContent>"))
+        self.assertIn("privacyPolicy.data?.policy_version", page)
 
     def test_user_center_links_to_real_legal_pages(self):
         settings = (FRONTEND_SOURCE / "pages" / "SettingsPage.tsx").read_text(encoding="utf-8")

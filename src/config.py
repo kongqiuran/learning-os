@@ -22,6 +22,11 @@ DATA_DIR = _resolve_data_dir()
 OUTPUT_DIR = DATA_DIR / "outputs"
 UPLOAD_DIR = DATA_DIR / "uploads"
 DEFAULT_DATABASE_PATH = DATA_DIR / "database" / "learning_os.db"
+DEFAULT_PRIVACY_POLICY_VERSION = "2026.07.01-v1"
+CURRENT_PRIVACY_POLICY_VERSION = (
+    os.getenv("PRIVACY_POLICY_VERSION", DEFAULT_PRIVACY_POLICY_VERSION).strip()
+    or DEFAULT_PRIVACY_POLICY_VERSION
+)
 
 
 @dataclass(frozen=True)

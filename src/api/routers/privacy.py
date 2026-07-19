@@ -6,20 +6,31 @@ from src.api.dependencies import require_current_user
 from src.api.schemas import (
     PrivacyConsentRequest,
     PrivacyConsentResponse,
+    PrivacyConsentStatusResponse,
     PrivacyPolicyCurrentResponse,
 )
-from src.services.privacy_consent_service import (
-    get_current_policy_version,
-    record_privacy_consent,
-)
+from src.services.privacy_consent_service import PrivacyConsentService
 
 
 router = APIRouter(prefix="/api/privacy", tags=["privacy"])
+privacy_consent_service = PrivacyConsentService()
 
 
 @router.get("/current", response_model=PrivacyPolicyCurrentResponse)
 def get_current_privacy_policy():
-    return PrivacyPolicyCurrentResponse(policy_version=get_current_policy_version())
+    return PrivacyPolicyCurrentResponse(
+        policy_version=privacy_consent_service.get_current_policy_version()
+    )
+
+
+@router.get("/status", response_model=PrivacyConsentStatusResponse)
+def get_privacy_consent_status(user=Depends(require_current_user)):
+    status_result = privacy_consent_service.get_status(user.id)
+    return PrivacyConsentStatusResponse(
+        current_version=status_result.current_version,
+        accepted=status_result.accepted,
+        requires_reconsent=status_result.requires_reconsent,
+    )
 
 
 @router.post("/consent", response_model=PrivacyConsentResponse)
@@ -36,17 +47,7 @@ def submit_privacy_consent(
             },
         )
 
-    current_version = get_current_policy_version()
-    if payload.policy_version != current_version:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={
-                "code": "policy_version_outdated",
-                "message": "Review and accept the current privacy policy version.",
-            },
-        )
-
-    consent, created = record_privacy_consent(user.id, current_version)
+    consent, created = privacy_consent_service.record_current_consent(user.id)
     return PrivacyConsentResponse(
         policy_version=consent.policy_version,
         accepted_at=_as_utc(consent.accepted_at),

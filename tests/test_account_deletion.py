@@ -17,6 +17,7 @@ from src.models import (
     Knowledge,
     KnowledgeView,
     LearningPackage,
+    PrivacyConsent,
     User,
 )
 from src.services.account_deletion_service import (
@@ -47,6 +48,7 @@ class AccountDeletionTest(unittest.TestCase):
             for model in (
                 KnowledgeView,
                 Knowledge,
+                PrivacyConsent,
                 LearningPackage,
                 DocumentAnalysis,
                 Document,
@@ -123,6 +125,8 @@ class AccountDeletionTest(unittest.TestCase):
                     ),
                     KnowledgeView(user_id=self.user_a.id, knowledge_key="a:1"),
                     KnowledgeView(user_id=self.user_b.id, knowledge_key="b:1"),
+                    PrivacyConsent(user_id=self.user_a.id, policy_version="2026.07.01-v1"),
+                    PrivacyConsent(user_id=self.user_b.id, policy_version="2026.07.01-v1"),
                 ]
             )
             session.flush()
@@ -184,9 +188,20 @@ class AccountDeletionTest(unittest.TestCase):
                 ),
                 None,
             )
+            self.assertEqual(
+                session.scalar(
+                    select(PrivacyConsent).where(PrivacyConsent.user_id == self.user_a.id)
+                ),
+                None,
+            )
             self.assertIsNotNone(session.get(User, self.user_b.id))
             self.assertIsNotNone(session.get(Course, self.course_b_id))
             self.assertIsNotNone(session.get(Document, self.document_b_id))
+            self.assertIsNotNone(
+                session.scalar(
+                    select(PrivacyConsent).where(PrivacyConsent.user_id == self.user_b.id)
+                )
+            )
             self.assertIsNotNone(
                 session.scalar(
                     select(DocumentAnalysis).where(

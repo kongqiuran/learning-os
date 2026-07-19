@@ -15,6 +15,8 @@ import type {
   KnowledgeListResponse,
   KnowledgeViewedResponse,
   PrivacyPolicyCurrentResponse,
+  PrivacyConsentResponse,
+  PrivacyConsentStatusResponse,
   UsageSummaryResponse,
 } from '../types/api'
 
@@ -89,6 +91,12 @@ export const api = {
       body: JSON.stringify({ password, confirmation }),
     }),
   privacyPolicy: () => request<PrivacyPolicyCurrentResponse>('/api/privacy/current'),
+  privacyConsentStatus: () => request<PrivacyConsentStatusResponse>('/api/privacy/status'),
+  acceptPrivacyConsent: () =>
+    request<PrivacyConsentResponse>('/api/privacy/consent', {
+      method: 'POST',
+      body: JSON.stringify({ accepted: true }),
+    }),
   usage: () => request<UsageSummaryResponse>('/api/billing/usage'),
   dashboard: () => request<DashboardResponse>('/api/dashboard'),
   courses: () => request<CourseListResponse>('/api/courses'),

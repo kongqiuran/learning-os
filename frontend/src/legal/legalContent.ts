@@ -1,4 +1,3 @@
-export const LEGAL_POLICY_VERSION = '2026.07.01-v1'
 export const LEGAL_EFFECTIVE_DATE = '2026年7月1日'
 
 export type LegalDocumentKind = 'privacy' | 'terms'
@@ -16,7 +15,7 @@ export const legalDocuments: Record<LegalDocumentKind, LegalDocument> = {
     content: `
 ## 一、适用范围
 
-本隐私政策适用于 Learning OS 提供的课程资料整理、学习内容生成、知识检索和学习辅助服务。本政策与《Learning OS 用户协议》共同构成版本 **${LEGAL_POLICY_VERSION}** 的法律文件。
+本隐私政策适用于 Learning OS 提供的课程资料整理、学习内容生成、知识检索和学习辅助服务。本政策与《Learning OS 用户协议》共同构成本页面顶部所示版本的法律文件。
 
 ## 二、我们收集的信息
 
@@ -73,7 +72,7 @@ export const legalDocuments: Record<LegalDocumentKind, LegalDocument> = {
     content: `
 ## 一、协议范围
 
-本协议是你与 Learning OS 服务运营者之间关于注册、登录和使用 Learning OS 服务的约定。本协议与《Learning OS 隐私政策》共同构成版本 **${LEGAL_POLICY_VERSION}** 的法律文件。
+本协议是你与 Learning OS 服务运营者之间关于注册、登录和使用 Learning OS 服务的约定。本协议与《Learning OS 隐私政策》共同构成本页面顶部所示版本的法律文件。
 
 ## 二、账号注册与安全
 

@@ -41,7 +41,8 @@ class PrivacyPolicyCurrentResponse(BaseModel):
 
 
 class PrivacyConsentRequest(BaseModel):
-    policy_version: str = Field(min_length=1, max_length=50)
+    model_config = ConfigDict(extra="forbid")
+
     accepted: bool
 
 
@@ -49,6 +50,12 @@ class PrivacyConsentResponse(BaseModel):
     policy_version: str
     accepted_at: datetime
     created: bool
+
+
+class PrivacyConsentStatusResponse(BaseModel):
+    current_version: str
+    accepted: bool
+    requires_reconsent: bool
 
 
 class AiGenerationUsageResponse(BaseModel):

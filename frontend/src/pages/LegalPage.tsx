@@ -3,15 +3,16 @@ import { Link } from 'react-router-dom'
 
 import { Card } from '../components/ui/Card'
 import { MarkdownContent } from '../components/ui/MarkdownContent'
+import { usePrivacyPolicy } from '../hooks/useUserCenter'
 import {
   LEGAL_EFFECTIVE_DATE,
-  LEGAL_POLICY_VERSION,
   legalDocuments,
   type LegalDocumentKind,
 } from '../legal/legalContent'
 
 export function LegalPage({ kind }: { kind: LegalDocumentKind }) {
   const document = legalDocuments[kind]
+  const privacyPolicy = usePrivacyPolicy()
 
   return (
     <main className="min-h-screen bg-slate-50">
@@ -37,7 +38,7 @@ export function LegalPage({ kind }: { kind: LegalDocumentKind }) {
           <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">{document.title}</h1>
           <p className="mt-3 text-sm leading-6 text-slate-500">{document.description}</p>
           <div className="mt-5 flex flex-wrap gap-x-6 gap-y-2 text-xs text-slate-500">
-            <span>协议版本：{LEGAL_POLICY_VERSION}</span>
+            <span>协议版本：{privacyPolicy.data?.policy_version ?? '正在读取'}</span>
             <span>生效日期：{LEGAL_EFFECTIVE_DATE}</span>
           </div>
         </div>

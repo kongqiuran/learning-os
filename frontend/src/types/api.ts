@@ -129,6 +129,18 @@ export interface PrivacyPolicyCurrentResponse {
   policy_version: string
 }
 
+export interface PrivacyConsentStatusResponse {
+  current_version: string
+  accepted: boolean
+  requires_reconsent: boolean
+}
+
+export interface PrivacyConsentResponse {
+  policy_version: string
+  accepted_at: string
+  created: boolean
+}
+
 export interface AccountDeletionResponse {
   deletion_id: string
   status: string
