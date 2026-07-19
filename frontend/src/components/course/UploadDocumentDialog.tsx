@@ -4,20 +4,32 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { useUploadDocument } from '../../hooks/useCourseSpace'
 import { ApiError } from '../../lib/api'
 import { Button } from '../ui/Button'
+import { UPLOAD_CATEGORIES, type DocumentType } from './uploadCategories'
 
-export function UploadDocumentDialog({ courseId, open, onClose }: { courseId: string | undefined; open: boolean; onClose: () => void }) {
+export function UploadDocumentDialog({
+  courseId,
+  open,
+  initialDocumentType,
+  onClose,
+}: {
+  courseId: string | undefined
+  open: boolean
+  initialDocumentType: DocumentType
+  onClose: () => void
+}) {
   const [file, setFile] = useState<File | null>(null)
-  const [documentType, setDocumentType] = useState('OTHER')
+  const [documentType, setDocumentType] = useState<DocumentType>(initialDocumentType)
   const upload = useUploadDocument(courseId)
 
   useEffect(() => {
     if (!open) return
+    setDocumentType(initialDocumentType)
     function closeOnEscape(event: KeyboardEvent) {
       if (event.key === 'Escape' && !upload.isPending) onClose()
     }
     window.addEventListener('keydown', closeOnEscape)
     return () => window.removeEventListener('keydown', closeOnEscape)
-  }, [open, onClose, upload.isPending])
+  }, [initialDocumentType, open, onClose, upload.isPending])
 
   if (!open) return null
 
@@ -29,7 +41,6 @@ export function UploadDocumentDialog({ courseId, open, onClose }: { courseId: st
       {
         onSuccess: () => {
           setFile(null)
-          setDocumentType('OTHER')
           onClose()
         },
       },
@@ -67,17 +78,27 @@ export function UploadDocumentDialog({ courseId, open, onClose }: { courseId: st
               onChange={(event) => setFile(event.target.files?.[0] ?? null)}
             />
           </label>
-          <label className="block text-sm font-medium text-slate-700">
-            资料类型
-            <select className="mt-2 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" value={documentType} onChange={(event) => setDocumentType(event.target.value)}>
-              <option value="OTHER">其他资料</option>
-              <option value="TEXTBOOK">教材</option>
-              <option value="SLIDES">课程幻灯片</option>
-              <option value="NOTES">笔记</option>
-              <option value="HOMEWORK">作业</option>
-              <option value="EXAM">试卷</option>
-            </select>
-          </label>
+          <fieldset>
+            <legend className="text-sm font-medium text-slate-700">这份资料属于哪一类？</legend>
+            <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {UPLOAD_CATEGORIES.map((category) => (
+                <button
+                  key={category.type}
+                  type="button"
+                  className={`rounded-xl border px-3 py-2.5 text-left transition ${
+                    documentType === category.type
+                      ? 'border-blue-500 bg-blue-50 text-blue-800 ring-2 ring-blue-100'
+                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                  }`}
+                  onClick={() => setDocumentType(category.type)}
+                  aria-pressed={documentType === category.type}
+                >
+                  <strong className="block text-sm">{category.label}</strong>
+                  <span className="mt-0.5 block text-[11px] leading-4 text-slate-400">{category.description}</span>
+                </button>
+              ))}
+            </div>
+          </fieldset>
           {upload.isError ? <p className="rounded-xl bg-orange-50 px-3 py-2.5 text-sm text-orange-700">{upload.error instanceof ApiError ? upload.error.message : '资料上传失败，请稍后重试。'}</p> : null}
           <div className="flex justify-end gap-3 pt-2">
             <Button variant="secondary" onClick={onClose} disabled={upload.isPending}>取消</Button>
