@@ -84,6 +84,18 @@ class UsageQuotaTest(unittest.TestCase):
         self.assertEqual(get_ai_generation_usage(self.user_a.id, now=NOW), 2)
         self.assertEqual(get_ai_generation_usage(self.user_b.id, now=NOW), 1)
 
+    def test_current_user_can_read_free_plan_usage_summary(self):
+        self._authenticate_as(self.user_a)
+        with patch.dict(os.environ, {"FREE_MONTHLY_AI_GENERATIONS": "3"}):
+            reserve_ai_generation(self.user_a.id)
+            response = self.client.get("/api/billing/usage")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["plan"], "free")
+        self.assertEqual(response.json()["ai_generations"]["used"], 1)
+        self.assertEqual(response.json()["ai_generations"]["limit"], 3)
+        self.assertEqual(response.json()["ai_generations"]["remaining"], 2)
+
     def _authenticate_as(self, user):
         self.app.dependency_overrides[require_current_user] = lambda: user
 

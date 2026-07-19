@@ -1,11 +1,11 @@
-import { BookOpen, CreditCard, FlaskConical, LayoutDashboard, Plus, Settings } from 'lucide-react'
+import { BookOpen, CircleUserRound, CreditCard, FlaskConical, LayoutDashboard, Plus } from 'lucide-react'
 import { NavLink, useNavigate } from 'react-router-dom'
 
 import { Button } from '../ui/Button'
 
 const navigation = [
   { to: '/dashboard', label: '我的课程', icon: LayoutDashboard },
-  { to: '/settings', label: '设置', icon: Settings },
+  { to: '/settings', label: '用户中心', icon: CircleUserRound },
 ]
 
 interface SidebarProps {

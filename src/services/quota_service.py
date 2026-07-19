@@ -115,6 +115,18 @@ def get_ai_generation_usage(user_id, now=None):
     return int(used)
 
 
+def get_ai_generation_quota(user_id, now=None):
+    current_time = _as_utc(now or datetime.now(timezone.utc))
+    used = get_ai_generation_usage(user_id, now=current_time)
+    limit = _get_free_ai_generation_limit()
+    return {
+        "used": used,
+        "limit": limit,
+        "remaining": max(0, limit - used),
+        "resets_at": _next_month(current_time),
+    }
+
+
 def _get_free_ai_generation_limit():
     configured = os.getenv(
         "FREE_MONTHLY_AI_GENERATIONS",

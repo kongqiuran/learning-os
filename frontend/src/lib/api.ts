@@ -1,5 +1,6 @@
 import type {
   ApiErrorPayload,
+  AccountDeletionResponse,
   AssistantQueryInput,
   AssistantQueryResponse,
   AuthResponse,
@@ -13,6 +14,8 @@ import type {
   KnowledgeDetail,
   KnowledgeListResponse,
   KnowledgeViewedResponse,
+  PrivacyPolicyCurrentResponse,
+  UsageSummaryResponse,
 } from '../types/api'
 
 export class ApiError extends Error {
@@ -43,6 +46,8 @@ const localizedMessages: Record<string, string> = {
   generation_task_not_found: '课程整理任务不存在或已经失效。',
   assistant_unavailable: '课程助手暂时无法回答，请稍后重试。',
   knowledge_not_found: '知识内容不存在或你没有访问权限。',
+  confirmation_required: '请输入完整确认文字后再注销账号。',
+  quota_exceeded: '本月 AI 整理次数已用完。',
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -78,6 +83,13 @@ export const api = {
       body: JSON.stringify({ email, password, confirm_password: confirmPassword }),
     }),
   logout: () => request<{ message: string }>('/api/auth/logout', { method: 'POST' }),
+  deleteAccount: (password: string, confirmation: string) =>
+    request<AccountDeletionResponse>('/api/account', {
+      method: 'DELETE',
+      body: JSON.stringify({ password, confirmation }),
+    }),
+  privacyPolicy: () => request<PrivacyPolicyCurrentResponse>('/api/privacy/current'),
+  usage: () => request<UsageSummaryResponse>('/api/billing/usage'),
   dashboard: () => request<DashboardResponse>('/api/dashboard'),
   courses: () => request<CourseListResponse>('/api/courses'),
   course: (courseId: number | string) => request<CourseSummary>(`/api/courses/${courseId}`),

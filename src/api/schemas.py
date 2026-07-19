@@ -51,6 +51,18 @@ class PrivacyConsentResponse(BaseModel):
     created: bool
 
 
+class AiGenerationUsageResponse(BaseModel):
+    used: int
+    limit: int
+    remaining: int
+    resets_at: datetime
+
+
+class UsageSummaryResponse(BaseModel):
+    plan: str
+    ai_generations: AiGenerationUsageResponse
+
+
 class MessageResponse(BaseModel):
     message: str
 

@@ -114,3 +114,23 @@ export interface KnowledgeViewedResponse {
   viewed: boolean
   viewed_at: string
 }
+
+export interface UsageSummaryResponse {
+  plan: string
+  ai_generations: {
+    used: number
+    limit: number
+    remaining: number
+    resets_at: string
+  }
+}
+
+export interface PrivacyPolicyCurrentResponse {
+  policy_version: string
+}
+
+export interface AccountDeletionResponse {
+  deletion_id: string
+  status: string
+  message: string
+}
