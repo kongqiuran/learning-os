@@ -36,6 +36,21 @@ class AccountDeletionResponse(BaseModel):
     message: str
 
 
+class PrivacyPolicyCurrentResponse(BaseModel):
+    policy_version: str
+
+
+class PrivacyConsentRequest(BaseModel):
+    policy_version: str = Field(min_length=1, max_length=50)
+    accepted: bool
+
+
+class PrivacyConsentResponse(BaseModel):
+    policy_version: str
+    accepted_at: datetime
+    created: bool
+
+
 class MessageResponse(BaseModel):
     message: str
 
