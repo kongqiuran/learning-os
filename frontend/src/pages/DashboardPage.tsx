@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 
 import { CourseCard } from '../components/domain/CourseCard'
 import { CreateCourseDialog } from '../components/domain/CreateCourseDialog'
+import { WelcomeGuide } from '../components/domain/WelcomeGuide'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { StatePanel } from '../components/ui/StatePanel'
@@ -51,6 +52,9 @@ export function DashboardPage() {
         </div>
       ) : (
         <>
+          {dashboard.data.course_count === 0 && currentUser.data ? (
+            <WelcomeGuide userId={currentUser.data.user.id} onCreateCourse={openCreateDialog} />
+          ) : null}
           <div className="mt-8 grid gap-4 sm:grid-cols-2">
             <MetricCard icon={BookOpen} label="课程数量" value={dashboard.data.course_count} help="你创建的课程学习空间" />
             <MetricCard icon={FileText} label="课程资料" value={dashboard.data.document_count} help="所有课程中的真实资料数量" />

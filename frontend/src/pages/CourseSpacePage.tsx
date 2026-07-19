@@ -66,6 +66,10 @@ export function CourseSpacePage() {
     document.getElementById('course-assistant')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
+  function generateLearningPackage() {
+    generation.mutate(undefined, { onSuccess: (task) => setGenerationTaskId(task.id) })
+  }
+
   return (
     <section>
       <Button variant="ghost" onClick={() => navigate('/dashboard')}><ArrowLeft className="size-4" /> 返回课程列表</Button>
@@ -95,7 +99,7 @@ export function CourseSpacePage() {
           documentCount={documents.length}
           learningPackage={displayedLearningPackage}
           generating={isGenerating}
-          onGenerate={() => generation.mutate(undefined, { onSuccess: (task) => setGenerationTaskId(task.id) })}
+          onGenerate={generateLearningPackage}
           onOpenKnowledge={() => navigate(`/courses/${courseId}/knowledge`)}
         />
 
@@ -106,7 +110,13 @@ export function CourseSpacePage() {
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-blue-600">Learning content</p>
               <h2 className="mt-1 text-xl font-semibold text-slate-950">课程学习内容</h2>
             </div>
-            <LearningPackageView learningPackage={displayedLearningPackage} generating={isGenerating} onSelectSection={selectSection} />
+            <LearningPackageView
+              learningPackage={displayedLearningPackage}
+              generating={isGenerating}
+              canGenerate={documents.length > 0}
+              onGenerate={generateLearningPackage}
+              onSelectSection={selectSection}
+            />
           </section>
         </main>
 

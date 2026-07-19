@@ -2,6 +2,7 @@ import { BookOpenText, CircleAlert, Sparkles } from 'lucide-react'
 
 import type { LearningPackage } from '../../types/api'
 import { MarkdownContent } from '../ui/MarkdownContent'
+import { Button } from '../ui/Button'
 import { Card } from '../ui/Card'
 import { StatePanel } from '../ui/StatePanel'
 
@@ -21,10 +22,14 @@ const sectionOrder = Object.keys(sectionLabels)
 export function LearningPackageView({
   learningPackage,
   generating,
+  canGenerate,
+  onGenerate,
   onSelectSection,
 }: {
   learningPackage: LearningPackage | null
   generating: boolean
+  canGenerate: boolean
+  onGenerate: () => void
   onSelectSection: (section: string) => void
 }) {
   const isLoading = generating || learningPackage?.status === 'pending' || learningPackage?.status === 'processing'
@@ -73,7 +78,14 @@ export function LearningPackageView({
           <StatePanel variant="empty" title="学习包暂时没有可展示内容" description="可以重新整理课程内容，或检查当前资料是否包含有效文本。" />
         )
       ) : (
-        <StatePanel variant="empty" title="课程内容尚未整理" description="上传资料后，使用“整理课程内容”生成属于这门课程的学习内容。" />
+        <StatePanel
+          variant="empty"
+          title="课程内容尚未整理"
+          description={canGenerate ? '资料已经准备好，可以让 AI 整理章节重点、公式和练习内容。' : '先上传一份教材或课件，再生成属于这门课程的学习内容。'}
+          action={canGenerate ? (
+            <Button variant="ai" onClick={onGenerate}><Sparkles className="size-4" /> 开始整理课程内容</Button>
+          ) : null}
+        />
       )}
     </div>
   )
