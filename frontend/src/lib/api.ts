@@ -4,6 +4,7 @@ import type {
   AssistantQueryInput,
   AssistantQueryResponse,
   AuthResponse,
+  BillingProductListResponse,
   CourseCreateInput,
   CourseListResponse,
   CourseSummary,
@@ -18,6 +19,8 @@ import type {
   PrivacyPolicyCurrentResponse,
   PrivacyConsentResponse,
   PrivacyConsentStatusResponse,
+  PaymentOrder,
+  PaymentOrderCreateInput,
   UsageSummaryResponse,
 } from '../types/api'
 
@@ -156,6 +159,14 @@ export const api = {
       body: JSON.stringify({ accepted: true }),
     }),
   usage: () => request<UsageSummaryResponse>('/api/billing/usage'),
+  billingProducts: () => request<BillingProductListResponse>('/api/billing/products'),
+  createPaymentOrder: (input: PaymentOrderCreateInput) =>
+    request<PaymentOrder>('/api/billing/orders', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+  paymentOrder: (orderNo: string) =>
+    request<PaymentOrder>(`/api/billing/orders/${encodeURIComponent(orderNo)}`),
   dashboard: () => request<DashboardResponse>('/api/dashboard'),
   courses: () => request<CourseListResponse>('/api/courses'),
   course: (courseId: number | string) => request<CourseSummary>(`/api/courses/${courseId}`),

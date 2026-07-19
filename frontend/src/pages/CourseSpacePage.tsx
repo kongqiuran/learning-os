@@ -27,6 +27,7 @@ import { courseSpaceQueryKey, useCourseSpace, useGenerationTask } from '../hooks
 import { useCurrentUser } from '../hooks/useCurrentUser'
 import { useCourseKnowledge } from '../hooks/useKnowledge'
 import { api, ApiError } from '../lib/api'
+import { asCreditError, purchaseUrl } from '../lib/billing'
 import type { Chapter, DocumentSummary, LearningPackage } from '../types/api'
 
 type Scene = 'follow' | 'textbook' | 'exam'
@@ -232,7 +233,7 @@ export function CourseSpacePage({ scene }: { scene: Scene }) {
               title={selectedChapter?.title ? `${selectedChapter.title}的资料` : '未分章节资料'}
               description="上传课件、练习或补充资料，新资料会直接归入当前章节。"
             />
-            <LearningSection title={selectedChapter?.title ?? '未分章节'} packageData={displayedPackage} previousPackage={completedScopedPackage} generating={isGenerating} canGenerate={filteredDocuments.length > 0} onGenerate={() => generate.mutate(selectedChapterId == null ? { unassigned: true } : { chapterId: selectedChapterId })} onSelectSection={openAssistant} sections={sceneInfo.follow.sections} emptyDescription="先上传当前章节的课件、练习或补充资料，再开始整理。" error={requestMatchesSelection ? generate.error : null} />
+            <LearningSection courseId={courseId} scene={scene} title={selectedChapter?.title ?? '未分章节'} packageData={displayedPackage} previousPackage={completedScopedPackage} generating={isGenerating} canGenerate={filteredDocuments.length > 0} onGenerate={() => generate.mutate(selectedChapterId == null ? { unassigned: true } : { chapterId: selectedChapterId })} onSelectSection={openAssistant} sections={sceneInfo.follow.sections} emptyDescription="先上传当前章节的课件、练习或补充资料，再开始整理。" error={requestMatchesSelection ? generate.error : null} />
           </div>
         </div>
       ) : null}
@@ -241,7 +242,7 @@ export function CourseSpacePage({ scene }: { scene: Scene }) {
         <div className="mt-6 space-y-5">
           <CourseMaterials courseId={courseId} documents={textbooks} allowedDocumentTypes={SCENE_UPLOAD_TYPES.textbook} title="我的教材" description="每本教材独立解析，避免不同版本的知识结构互相混合。" showDocumentList={false} />
           <TextbookList documents={textbooks} selectedId={selectedTextbookId} onSelect={setSelectedTextbookId} onGenerate={(id) => generate.mutate({ documentId: id })} generating={isGenerating} />
-          <LearningSection packageData={displayedPackage} previousPackage={completedScopedPackage} generating={isGenerating} canGenerate={textbooks.length > 0} onGenerate={() => selectedTextbookId && generate.mutate({ documentId: selectedTextbookId })} onSelectSection={openAssistant} sections={sceneInfo.textbook.sections} showInitialGenerate={false} emptyDescription="先上传一本教材，再为这本教材生成知识大纲。" error={requestMatchesSelection ? generate.error : null} />
+          <LearningSection courseId={courseId} scene={scene} packageData={displayedPackage} previousPackage={completedScopedPackage} generating={isGenerating} canGenerate={textbooks.length > 0} onGenerate={() => selectedTextbookId && generate.mutate({ documentId: selectedTextbookId })} onSelectSection={openAssistant} sections={sceneInfo.textbook.sections} showInitialGenerate={false} emptyDescription="先上传一本教材，再为这本教材生成知识大纲。" error={requestMatchesSelection ? generate.error : null} />
           <TextbookKnowledgeSection courseId={courseId} />
         </div>
       ) : null}
@@ -249,7 +250,7 @@ export function CourseSpacePage({ scene }: { scene: Scene }) {
       {scene === 'exam' ? (
         <div className="mt-6 space-y-5">
           <CourseMaterials courseId={courseId} documents={filteredDocuments} allowedDocumentTypes={SCENE_UPLOAD_TYPES.exam} title="考试资料" description="上传试卷和练习资料，AI 只会依据这些内容整理考试冲刺建议。" />
-          <LearningSection packageData={displayedPackage} previousPackage={completedScopedPackage} generating={isGenerating} canGenerate={filteredDocuments.length > 0} onGenerate={() => generate.mutate({})} onSelectSection={openAssistant} sections={sceneInfo.exam.sections} emptyDescription="先上传试卷或练习资料，再开始整理考试重点。" error={requestMatchesSelection ? generate.error : null} />
+          <LearningSection courseId={courseId} scene={scene} packageData={displayedPackage} previousPackage={completedScopedPackage} generating={isGenerating} canGenerate={filteredDocuments.length > 0} onGenerate={() => generate.mutate({})} onSelectSection={openAssistant} sections={sceneInfo.exam.sections} emptyDescription="先上传试卷或练习资料，再开始整理考试重点。" error={requestMatchesSelection ? generate.error : null} />
         </div>
       ) : null}
 
@@ -287,23 +288,20 @@ function scopeMatchesSelection(scope: GenerationScope, scene: Scene, chapterId: 
   return Object.keys(scope).length === 0
 }
 
-function LearningSection({ title, packageData, previousPackage, generating, canGenerate, onGenerate, onSelectSection, sections, showInitialGenerate = true, emptyDescription, error }: { title?: string; packageData: LearningPackage | null; previousPackage?: LearningPackage | null; generating: boolean; canGenerate: boolean; onGenerate: () => void; onSelectSection: (section: string) => void; sections: readonly string[]; showInitialGenerate?: boolean; emptyDescription: string; error: Error | null }) {
+function LearningSection({ courseId, scene, title, packageData, previousPackage, generating, canGenerate, onGenerate, onSelectSection, sections, showInitialGenerate = true, emptyDescription, error }: { courseId?: string; scene: Scene; title?: string; packageData: LearningPackage | null; previousPackage?: LearningPackage | null; generating: boolean; canGenerate: boolean; onGenerate: () => void; onSelectSection: (section: string) => void; sections: readonly string[]; showInitialGenerate?: boolean; emptyDescription: string; error: Error | null }) {
   const navigate = useNavigate()
-  const creditError = error instanceof ApiError && ['insufficient_credits', 'quota_exceeded', 'course_quota_exceeded', 'assistant_quota_exceeded'].includes(error.code) ? error : null
+  const creditError = asCreditError(error)
   return (
     <section>
       <div className="mb-3"><h2 className="text-xl font-semibold text-stone-950">{title ? `${title} · AI 整理结果` : 'AI 整理结果'}</h2><p className="mt-1 text-sm text-stone-500">{title ? '只使用当前章节中的资料，结果不会与其他章节混合。' : '仅根据当前场景中的资料生成。'}</p></div>
       {creditError ? (
         <Card className="mb-4 border-amber-200 bg-amber-50/70 p-5">
-          <h3 className="font-semibold text-amber-950">您的 AI 整理额度不足</h3>
-          <p className="mt-2 text-sm leading-6 text-amber-800">
-            {creditError.details.quota_source === 'free_monthly' ? '本月免费 AI 整理次数已经用完。' : '当前课程对应功能的使用次数已经用完。'}
-          </p>
+          <h3 className="font-semibold text-amber-950">AI 额度不足</h3>
+          <p className="mt-2 text-sm leading-6 text-amber-800">当前功能需要购买课程权益。</p>
           <p className="mt-2 text-sm text-amber-700">剩余次数：{creditError.details.remaining ?? 0}</p>
           {creditError.details.resets_at ? <p className="mt-1 text-xs text-amber-700">免费额度将在 {new Intl.DateTimeFormat('zh-CN', { month: 'long', day: 'numeric' }).format(new Date(creditError.details.resets_at))} 重置。</p> : null}
           <div className="mt-4 flex flex-wrap gap-3">
-            <Button onClick={() => navigate(creditError.details.purchase_url ?? '/pricing')}>查看套餐</Button>
-            <Button variant="secondary" onClick={() => navigate(creditError.details.purchase_url ?? '/pricing')}>联系人工开通</Button>
+            <Button onClick={() => navigate(purchaseUrl(creditError, courseId, scene))}>查看套餐</Button>
           </div>
         </Card>
       ) : error ? <p className="mb-3 rounded-xl bg-orange-50 px-3 py-2.5 text-sm text-orange-700">{error instanceof ApiError ? error.message : '暂时无法开始整理，请稍后重试。'}</p> : null}

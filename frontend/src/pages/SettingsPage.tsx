@@ -19,9 +19,11 @@ import { Card } from '../components/ui/Card'
 import { ProgressBar } from '../components/ui/ProgressBar'
 import { currentUserQueryKey, useCurrentUser } from '../hooks/useCurrentUser'
 import { useDashboard } from '../hooks/useDashboard'
-import { usePrivacyPolicy, useUsageSummary } from '../hooks/useUserCenter'
+import { useBillingProducts, usePrivacyPolicy, useUsageSummary } from '../hooks/useUserCenter'
 import { api, ApiError } from '../lib/api'
+import { formatMoney } from '../lib/billing'
 import { SUPPORT_EMAIL, supportMailto } from '../lib/support'
+import type { BillingProduct, UsageSummaryResponse } from '../types/api'
 
 const ACCOUNT_DELETION_CONFIRMATION = 'DELETE MY ACCOUNT'
 
@@ -29,6 +31,7 @@ export function SettingsPage() {
   const currentUser = useCurrentUser()
   const dashboard = useDashboard()
   const usage = useUsageSummary()
+  const products = useBillingProducts()
   const privacyPolicy = usePrivacyPolicy()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
@@ -57,7 +60,8 @@ export function SettingsPage() {
   }
 
   const aiUsage = usage.data?.ai_generations
-  const aiPercentage = aiUsage ? Math.round((aiUsage.used / aiUsage.limit) * 100) : 0
+  const aiPercentage = aiUsage?.limit ? Math.round((aiUsage.used / aiUsage.limit) * 100) : 0
+  const productsByCode = new Map(products.data?.products.map((product) => [product.product_code, product]) ?? [])
 
   return (
     <section className="max-w-5xl">
@@ -67,7 +71,16 @@ export function SettingsPage() {
         <p className="mt-2 text-sm text-slate-500">查看当前套餐、额度与账号设置。</p>
       </div>
 
-      {usage.data?.course_entitlements.length ? <div className="mt-8"><h2 className="text-xl font-semibold text-stone-950">已开通课程权益</h2><div className="mt-4 grid gap-4 md:grid-cols-2">{usage.data.course_entitlements.map((item) => <Card className="p-5" key={item.id}><div className="flex items-start justify-between gap-3"><div><h3 className="font-semibold text-stone-900">{item.course_name}</h3><p className="mt-1 text-xs text-stone-500">99 元单课学期版 · 至 {new Intl.DateTimeFormat('zh-CN').format(new Date(item.expires_at))}</p></div><span className="rounded-full bg-emerald-50 px-2 py-1 text-xs text-emerald-700">{item.status === 'active' ? '使用中' : item.status}</span></div><div className="mt-4 grid grid-cols-2 gap-2 text-xs text-stone-600"><span>跟课整理 {item.follow_remaining}/3</span><span>教材解析 {item.textbook_remaining}/3</span><span>考试冲刺 {item.exam_remaining}/3</span><span>课程问答 {item.assistant_remaining}/100</span></div></Card>)}</div></div> : null}
+      {usage.data?.course_entitlements.length ? (
+        <div className="mt-8">
+          <h2 className="text-xl font-semibold text-stone-950">已开通课程权益</h2>
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            {usage.data.course_entitlements.map((item) => (
+              <EntitlementCard item={item} product={productsByCode.get(item.product_code)} key={item.id} />
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       <div className="mt-8 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
         <Card className="overflow-hidden">
@@ -75,15 +88,15 @@ export function SettingsPage() {
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <div className="flex items-center gap-2 text-sm font-semibold text-blue-600">
-                  <Sparkles className="size-4" /> 当前套餐
+                  <Sparkles className="size-4" /> 免费使用额度
                 </div>
                 <div className="mt-3 flex items-center gap-3">
-                  <h2 className="text-3xl font-semibold tracking-tight text-slate-950">Free</h2>
+                  <h2 className="text-3xl font-semibold tracking-tight text-slate-950">每月 AI 额度</h2>
                   <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
                     <Check className="mr-1 inline size-3" />使用中
                   </span>
                 </div>
-                <p className="mt-2 text-sm text-slate-500">适合整理少量课程资料并体验 AI 学习内容。</p>
+                <p className="mt-2 text-sm text-slate-500">剩余次数与重置时间均由服务器实时返回。</p>
               </div>
               <span className="grid size-12 place-items-center rounded-2xl bg-blue-50 text-blue-600">
                 <Gauge className="size-6" />
@@ -107,12 +120,12 @@ export function SettingsPage() {
             <div className="sm:col-span-2">
               <ProgressBar value={aiPercentage} label="本月 AI 额度使用率" />
               <Link className="mt-4 inline-flex min-h-10 items-center justify-center rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700" to="/pricing">购买更多额度</Link>
-              {dashboard.isError || usage.isError ? (
+              {dashboard.isError || usage.isError || products.isError ? (
                 <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl bg-orange-50 px-3 py-2.5 text-sm text-orange-700">
                   使用情况暂时无法读取。
                   <button
                     className="font-semibold underline underline-offset-2"
-                    onClick={() => Promise.all([dashboard.refetch(), usage.refetch()])}
+                    onClick={() => Promise.all([dashboard.refetch(), usage.refetch(), products.refetch()])}
                   >
                     重新加载
                   </button>
@@ -261,6 +274,40 @@ function UsageMetric({ icon: Icon, label, value, help }: { icon: typeof BookOpen
       <p className="mt-1 text-xs leading-5 text-slate-400">{help}</p>
     </div>
   )
+}
+
+function EntitlementCard({
+  item,
+  product,
+}: {
+  item: UsageSummaryResponse['course_entitlements'][number]
+  product?: BillingProduct
+}) {
+  return (
+    <Card className="p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="font-semibold text-stone-900">{item.course_name}</h3>
+          <p className="mt-1 text-xs text-stone-500">
+            {product?.name ?? item.product_code}
+            {product ? ` · ${formatMoney(product.amount_cents, product.currency)}` : ''}
+            {' · '}有效期至 {new Intl.DateTimeFormat('zh-CN').format(new Date(item.expires_at))}
+          </p>
+        </div>
+        <span className="rounded-full bg-emerald-50 px-2 py-1 text-xs text-emerald-700">{item.status === 'active' ? '使用中' : item.status}</span>
+      </div>
+      <div className="mt-4 grid grid-cols-2 gap-2 text-xs text-stone-600">
+        <span>跟课整理 {formatAllowance(item.follow_remaining, product?.follow_allowance)}</span>
+        <span>教材分析 {formatAllowance(item.textbook_remaining, product?.textbook_allowance)}</span>
+        <span>考试冲刺 {formatAllowance(item.exam_remaining, product?.exam_allowance)}</span>
+        <span>课程助手 {formatAllowance(item.assistant_remaining, product?.assistant_allowance)}</span>
+      </div>
+    </Card>
+  )
+}
+
+function formatAllowance(remaining: number, total?: number) {
+  return total == null ? `剩余 ${remaining}` : `${remaining} / ${total}`
 }
 
 function formatResetDate(value: string) {

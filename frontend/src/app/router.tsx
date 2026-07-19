@@ -11,6 +11,7 @@ import { LoginPage } from '../pages/LoginPage'
 import { RegisterPage } from '../pages/RegisterPage'
 import { SettingsPage } from '../pages/SettingsPage'
 import { PricingPage } from '../pages/PricingPage'
+import { PurchasePage } from '../pages/PurchasePage'
 
 export function AppRouter() {
   return (
@@ -33,6 +34,7 @@ export function AppRouter() {
             <Route path="/courses/:courseId/knowledge/:knowledgeId" element={<KnowledgeDetailPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/pricing" element={<PricingPage />} />
+            <Route path="/purchase/:orderNo" element={<PurchasePage />} />
           </Route>
         </Route>
         <Route path="*" element={<Navigate to="/dashboard" replace />} />

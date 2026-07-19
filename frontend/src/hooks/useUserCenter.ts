@@ -4,6 +4,7 @@ import { api } from '../lib/api'
 
 
 export const usageQueryKey = ['billing', 'usage'] as const
+export const billingProductsQueryKey = ['billing', 'products'] as const
 export const privacyPolicyQueryKey = ['privacy', 'current-policy'] as const
 export const privacyConsentStatusQueryKey = ['privacy', 'consent-status'] as const
 
@@ -11,6 +12,13 @@ export function useUsageSummary() {
   return useQuery({
     queryKey: usageQueryKey,
     queryFn: api.usage,
+  })
+}
+
+export function useBillingProducts() {
+  return useQuery({
+    queryKey: billingProductsQueryKey,
+    queryFn: api.billingProducts,
   })
 }
 

@@ -169,6 +169,46 @@ export interface UsageSummaryResponse {
   }>
 }
 
+export interface BillingProduct {
+  product_code: string
+  name: string
+  description: string
+  amount_cents: number
+  currency: string
+  duration_policy: string
+  follow_allowance: number
+  textbook_allowance: number
+  exam_allowance: number
+  assistant_allowance: number
+}
+
+export interface BillingProductListResponse {
+  products: BillingProduct[]
+}
+
+export type PaymentOrderStatus = 'pending' | 'paid' | 'cancelled'
+
+export interface PaymentOrder {
+  order_no: string
+  user_id: number
+  course_id: number
+  product_code: string
+  product_snapshot: BillingProduct
+  amount_cents: number
+  currency: string
+  status: PaymentOrderStatus
+  entitlement_id: number | null
+  created_at: string
+  paid_at: string | null
+  operator_note: string | null
+}
+
+export interface PaymentOrderCreateInput {
+  course_id: number
+  product_code: string
+  request_key: string
+}
+
 export interface PrivacyPolicyCurrentResponse {
   policy_version: string
 }
