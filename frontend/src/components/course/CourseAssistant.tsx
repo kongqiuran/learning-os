@@ -1,5 +1,5 @@
 import { BookMarked, FileText, LoaderCircle, Send, Sparkles } from 'lucide-react'
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 
 import { useCourseAssistant } from '../../hooks/useCourseSpace'
 import { ApiError } from '../../lib/api'
@@ -13,17 +13,23 @@ export function CourseAssistant({
   currentSection,
   scene,
   chapterId,
+  initialQuestion = '',
 }: {
   courseId: string | undefined
   courseName: string
   currentSection: string
   scene?: string
   chapterId?: number | null
+  initialQuestion?: string
 }) {
   const [question, setQuestion] = useState('')
   const [submittedQuestion, setSubmittedQuestion] = useState('')
   const assistant = useCourseAssistant(courseId)
   const hasInsufficientContext = assistant.data?.answer === '当前课程资料中没有足够信息。'
+
+  useEffect(() => {
+    if (initialQuestion) setQuestion(`请结合“${initialQuestion}”解释：`)
+  }, [initialQuestion])
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault()
@@ -82,7 +88,9 @@ export function CourseAssistant({
               {assistant.data.source_files.length > 0 ? (
                 <ul className="mt-2 space-y-1.5">{assistant.data.source_files.map((file) => <li className="flex items-center gap-2 text-xs text-slate-600" key={file}><FileText className="size-3.5" />{file}</li>)}</ul>
               ) : hasInsufficientContext ? (
-                <p className="mt-2 text-xs leading-5 text-slate-500">当前没有可用于回答的来源文件。</p>
+                <div className="mt-2 rounded-xl bg-amber-50 p-3 text-xs leading-5 text-amber-800">
+                  当前没有可用于回答的来源文件。请先上传当前场景的资料并完成 AI 整理，再回来提问。
+                </div>
               ) : (
                 <p className="mt-2 text-xs leading-5 text-slate-500">回答来自已生成的课程学习内容，当前版本未保存精确文件引用。</p>
               )}

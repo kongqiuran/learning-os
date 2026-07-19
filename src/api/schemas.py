@@ -11,6 +11,7 @@ class LoginRequest(BaseModel):
 
 class RegisterRequest(LoginRequest):
     confirm_password: str
+    accepted_terms: bool = False
 
 
 class UserResponse(BaseModel):

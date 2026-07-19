@@ -14,6 +14,23 @@ class V2FrontendContractTest(unittest.TestCase):
         self.assertIn("保留资料并移到未分章节", page)
         self.assertIn("删除章节和其中资料", page)
         self.assertIn("keep_unassigned", page)
+        self.assertIn("textbook: 'textbooks'", page)
+
+    def test_new_uploads_hide_legacy_notes_and_are_scoped_by_scene(self):
+        categories = (ROOT / "components" / "course" / "uploadCategories.ts").read_text(encoding="utf-8")
+        dialog = (ROOT / "components" / "course" / "UploadDocumentDialog.tsx").read_text(encoding="utf-8")
+        self.assertNotIn("type: 'NOTES'", categories)
+        self.assertIn("follow: ['SLIDES', 'HOMEWORK', 'OTHER']", categories)
+        self.assertIn("textbook: ['TEXTBOOK']", categories)
+        self.assertIn("exam: ['EXAM', 'HOMEWORK']", categories)
+        self.assertIn("allowedDocumentTypes.includes", dialog)
+
+    def test_failed_generation_has_retry_and_section_question_opens_assistant(self):
+        package = (ROOT / "components" / "course" / "LearningPackageView.tsx").read_text(encoding="utf-8")
+        page = (ROOT / "pages" / "CourseSpacePage.tsx").read_text(encoding="utf-8")
+        self.assertIn("本次不会扣除额度", package)
+        self.assertIn("重新整理", package)
+        self.assertIn("onSelectSection={openAssistant}", page)
 
     def test_pricing_discloses_allowances_and_failure_refund(self):
         pricing = (ROOT / "pages" / "PricingPage.tsx").read_text(encoding="utf-8")

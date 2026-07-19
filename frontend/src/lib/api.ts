@@ -37,6 +37,8 @@ const localizedMessages: Record<string, string> = {
   session_expired: '登录状态已失效，请重新登录。',
   invalid_credentials: '邮箱或密码错误。',
   password_mismatch: '两次输入的密码不一致。',
+  weak_password: '密码至少需要 8 个字符。',
+  terms_consent_required: '请先阅读并同意隐私政策和用户协议。',
   email_registered: '该邮箱已经注册。',
   invalid_registration: '注册信息不完整，请检查后重试。',
   invalid_request: '提交的信息有误，请检查后重试。',
@@ -80,10 +82,10 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     }),
-  register: (email: string, password: string, confirmPassword: string) =>
+  register: (email: string, password: string, confirmPassword: string, acceptedTerms: boolean) =>
     request<AuthResponse>('/api/auth/register', {
       method: 'POST',
-      body: JSON.stringify({ email, password, confirm_password: confirmPassword }),
+      body: JSON.stringify({ email, password, confirm_password: confirmPassword, accepted_terms: acceptedTerms }),
     }),
   logout: () => request<{ message: string }>('/api/auth/logout', { method: 'POST' }),
   deleteAccount: (password: string, confirmation: string) =>

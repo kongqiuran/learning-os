@@ -12,10 +12,11 @@ export function RegisterPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [acceptedTerms, setAcceptedTerms] = useState(false)
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const register = useMutation({
-    mutationFn: () => api.register(email, password, confirmPassword),
+    mutationFn: () => api.register(email, password, confirmPassword, acceptedTerms),
     onSuccess: (data) => {
       queryClient.setQueryData(currentUserQueryKey, data)
       navigate('/dashboard', { replace: true })
@@ -29,17 +30,23 @@ export function RegisterPage() {
   }
 
   const mismatch = confirmPassword.length > 0 && password !== confirmPassword
+  const weakPassword = password.length > 0 && password.length < 8
 
   return (
     <AuthLayout title="创建你的学习空间" subtitle="从第一门课程开始，积累自己的学习资产。">
       <form className="space-y-4" onSubmit={handleSubmit}>
         <Input label="邮箱" type="email" value={email} onChange={setEmail} autoComplete="email" />
-        <Input label="密码" type="password" value={password} onChange={setPassword} autoComplete="new-password" />
+        <Input label="密码（至少 8 个字符）" type="password" value={password} onChange={setPassword} autoComplete="new-password" />
         <Input label="确认密码" type="password" value={confirmPassword} onChange={setConfirmPassword} autoComplete="new-password" />
         {mismatch ? <p className="text-sm text-orange-700">两次输入的密码不一致。</p> : null}
+        {weakPassword ? <p className="text-sm text-orange-700">密码至少需要 8 个字符。</p> : null}
+        <label className="flex items-start gap-3 rounded-xl bg-slate-50 p-3 text-sm leading-6 text-slate-600">
+          <input className="mt-1 size-4 accent-teal-700" type="checkbox" checked={acceptedTerms} onChange={(event) => setAcceptedTerms(event.target.checked)} required />
+          <span>我已阅读并同意 <Link className="font-semibold text-blue-600" to="/legal/privacy" target="_blank">隐私政策</Link> 和 <Link className="font-semibold text-blue-600" to="/legal/terms" target="_blank">用户协议</Link>。</span>
+        </label>
         {register.isError ? <p className="rounded-xl bg-orange-50 px-3 py-2.5 text-sm text-orange-700">{register.error instanceof ApiError ? register.error.message : '注册失败，请稍后重试。'}</p> : null}
-        <Button fullWidth type="submit" disabled={register.isPending || mismatch}>
-          {register.isPending ? '正在创建…' : '创建学习空间'} <ArrowRight className="size-4" />
+        <Button fullWidth type="submit" disabled={register.isPending || mismatch || weakPassword || !acceptedTerms}>
+          {register.isPending ? '正在创建…' : '创建账号'} <ArrowRight className="size-4" />
         </Button>
       </form>
       <p className="mt-6 text-center text-sm text-slate-500">

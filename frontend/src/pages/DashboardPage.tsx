@@ -26,7 +26,7 @@ export function DashboardPage() {
     <section className="mx-auto max-w-6xl">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div><p className="text-sm font-medium text-teal-700">Learning OS</p><h1 className="mt-2 text-3xl font-semibold tracking-tight text-stone-950">我的课程</h1><p className="mt-2 text-sm text-stone-500">选择一门课程，继续整理、理解和复习。</p></div>
-        <Button onClick={() => setSearchParams({ create: '1' })}><Plus className="size-4" />创建课程</Button>
+        {dashboard.data.courses.length > 0 ? <Button onClick={() => setSearchParams({ create: '1' })}><Plus className="size-4" />创建课程</Button> : null}
       </header>
 
       {recent ? <Card className="mt-8 border-teal-100 bg-[#f6faf8] p-6 sm:p-7"><p className="text-xs font-semibold uppercase tracking-[0.15em] text-teal-700">继续学习</p><div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><h2 className="text-2xl font-semibold text-stone-950">{recent.name}</h2><p className="mt-2 text-sm text-stone-500">最近更新 {formatDate(recent.updated_at)} · {recent.document_count} 份资料</p></div><Button onClick={() => openCourse(recent.id)}>继续学习<ArrowRight className="size-4" /></Button></div></Card> : null}

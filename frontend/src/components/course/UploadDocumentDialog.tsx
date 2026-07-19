@@ -10,11 +10,15 @@ export function UploadDocumentDialog({
   courseId,
   open,
   initialDocumentType,
+  allowedDocumentTypes,
+  chapterId,
   onClose,
 }: {
   courseId: string | undefined
   open: boolean
   initialDocumentType: DocumentType
+  allowedDocumentTypes: DocumentType[]
+  chapterId?: number | null
   onClose: () => void
 }) {
   const [file, setFile] = useState<File | null>(null)
@@ -37,7 +41,7 @@ export function UploadDocumentDialog({
     event.preventDefault()
     if (!file) return
     upload.mutate(
-      { file, documentType },
+      { file, documentType, chapterId },
       {
         onSuccess: () => {
           setFile(null)
@@ -81,7 +85,7 @@ export function UploadDocumentDialog({
           <fieldset>
             <legend className="text-sm font-medium text-slate-700">这份资料属于哪一类？</legend>
             <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {UPLOAD_CATEGORIES.map((category) => (
+              {UPLOAD_CATEGORIES.filter((category) => allowedDocumentTypes.includes(category.type)).map((category) => (
                 <button
                   key={category.type}
                   type="button"

@@ -6,6 +6,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Button } from '../components/ui/Button'
 import { currentUserQueryKey } from '../hooks/useCurrentUser'
 import { api, ApiError } from '../lib/api'
+import { supportMailto } from '../lib/support'
 
 export function LoginPage() {
   const [email, setEmail] = useState('')
@@ -32,6 +33,7 @@ export function LoginPage() {
       <form className="space-y-4" onSubmit={handleSubmit}>
         <Field label="邮箱" type="email" value={email} onChange={setEmail} autoComplete="email" />
         <Field label="密码" type="password" value={password} onChange={setPassword} autoComplete="current-password" />
+        <div className="-mt-2 text-right"><a className="text-xs font-medium text-blue-600 hover:text-blue-700" href={supportMailto('Learning OS 密码找回')}>忘记密码？联系人工找回</a></div>
         {login.isError ? <FormError error={login.error} /> : null}
         <Button fullWidth type="submit" disabled={login.isPending}>
           {login.isPending ? '正在登录…' : '进入 Learning OS'} <ArrowRight className="size-4" />

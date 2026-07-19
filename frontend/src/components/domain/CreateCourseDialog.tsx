@@ -51,7 +51,7 @@ export function CreateCourseDialog({ open, onClose }: CreateCourseDialogProps) {
       >
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-sm font-semibold text-blue-600">新的学习空间</p>
+            <p className="text-sm font-semibold text-blue-600">新课程</p>
             <h2 id="create-course-title" className="mt-1 text-xl font-semibold text-slate-950">创建课程</h2>
             <p className="mt-2 text-sm leading-6 text-slate-500">先建立课程，下一步再添加对应的学习资料。</p>
           </div>
@@ -78,7 +78,7 @@ export function CreateCourseDialog({ open, onClose }: CreateCourseDialogProps) {
               className="mt-2 min-h-24 w-full resize-y rounded-xl border border-slate-200 px-3 py-2.5 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
               value={description}
               onChange={(event) => setDescription(event.target.value)}
-              placeholder="记录学期、教师或课程目标"
+              placeholder="记录学期或课程目标"
             />
           </label>
           {createCourse.isError ? (
@@ -89,7 +89,7 @@ export function CreateCourseDialog({ open, onClose }: CreateCourseDialogProps) {
           <div className="flex justify-end gap-3 pt-2">
             <Button variant="secondary" onClick={onClose}>取消</Button>
             <Button type="submit" disabled={createCourse.isPending || !name.trim()}>
-              {createCourse.isPending ? '正在创建…' : '创建学习空间'}
+              {createCourse.isPending ? '正在创建…' : '创建课程'}
             </Button>
           </div>
         </form>

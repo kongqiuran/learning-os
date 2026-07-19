@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from src.api.dependencies import require_current_user
 from src.api.schemas import AuthResponse, LoginRequest, MessageResponse, RegisterRequest
 from src.services.user_service import (
+    InvalidPasswordError,
     UserAlreadyExistsError,
     authenticate_user,
     register_user,
@@ -19,12 +20,22 @@ def register(payload: RegisterRequest, request: Request):
             status_code=400,
             detail={"code": "password_mismatch", "message": "The passwords do not match."},
         )
+    if not payload.accepted_terms:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "terms_consent_required", "message": "Privacy policy and terms must be accepted."},
+        )
     try:
-        user = register_user(payload.email, payload.password)
+        user = register_user(payload.email, payload.password, accept_privacy=True)
     except UserAlreadyExistsError as exc:
         raise HTTPException(
             status_code=409,
             detail={"code": "email_registered", "message": "This email is already registered."},
+        ) from exc
+    except InvalidPasswordError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "weak_password", "message": str(exc)},
         ) from exc
     except ValueError as exc:
         raise HTTPException(

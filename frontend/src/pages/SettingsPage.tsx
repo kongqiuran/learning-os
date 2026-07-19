@@ -6,6 +6,7 @@ import {
   Gauge,
   LogOut,
   ShieldCheck,
+  LifeBuoy,
   Sparkles,
   Trash2,
   UserRound,
@@ -20,6 +21,7 @@ import { currentUserQueryKey, useCurrentUser } from '../hooks/useCurrentUser'
 import { useDashboard } from '../hooks/useDashboard'
 import { usePrivacyPolicy, useUsageSummary } from '../hooks/useUserCenter'
 import { api, ApiError } from '../lib/api'
+import { SUPPORT_EMAIL, supportMailto } from '../lib/support'
 
 const ACCOUNT_DELETION_CONFIRMATION = 'DELETE MY ACCOUNT'
 
@@ -133,6 +135,14 @@ export function SettingsPage() {
             <Button className="mt-5" variant="secondary" onClick={() => logout.mutate()} disabled={logout.isPending}>
               <LogOut className="size-4" /> {logout.isPending ? '正在退出…' : '退出登录'}
             </Button>
+          </Card>
+
+          <Card className="p-5 sm:p-6">
+            <div className="flex items-start gap-3">
+              <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-teal-50 text-teal-700"><LifeBuoy className="size-5" /></span>
+              <div><h2 className="font-semibold text-slate-900">帮助与反馈</h2><p className="mt-1 text-sm leading-6 text-slate-500">密码找回、退款、权益激活或产品问题均可人工处理。</p></div>
+            </div>
+            <a className="mt-5 inline-flex min-h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" href={supportMailto('Learning OS 用户反馈')}>联系 {SUPPORT_EMAIL}</a>
           </Card>
 
           <Card className="p-5 sm:p-6">

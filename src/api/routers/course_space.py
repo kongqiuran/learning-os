@@ -36,6 +36,7 @@ from src.services.document_service import (
 from src.services.quota_service import (
     UsageQuotaExceededError,
     release_ai_generation,
+    release_ai_generation_by_record_id,
     reserve_ai_generation,
 )
 from src.services.entitlement_service import EntitlementQuotaExceeded, consume_assistant, get_active_entitlement, require_scene_allowance
@@ -241,6 +242,13 @@ def _run_generation_background_task(package_id, course_id, user_id, scene=None, 
         else:
             run_queued_course_package(package_id, course_id, user_id, scene, scope_document_id)
     except Exception:
+        from src.database import get_db_session
+        from src.models import LearningPackage
+
+        with get_db_session() as session:
+            package = session.get(LearningPackage, package_id)
+            usage_record_id = package.usage_record_id if package is not None else None
+        release_ai_generation_by_record_id(user_id, usage_record_id)
         logger.exception(
             "Course content generation task failed.",
             extra={"package_id": package_id, "course_id": course_id},

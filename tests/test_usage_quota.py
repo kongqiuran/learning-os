@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from src.api.dependencies import require_current_user
 from src.api.factory import create_app
 from src.database import create_database_tables, get_db_session
-from src.models import UsageRecord, User, UserPlan
+from src.models import Course, LearningPackage, UsageRecord, User, UserPlan
 from src.services.quota_service import (
     UsageQuotaExceededError,
     get_ai_generation_usage,
@@ -95,6 +95,25 @@ class UsageQuotaTest(unittest.TestCase):
         self.assertEqual(response.json()["ai_generations"]["used"], 1)
         self.assertEqual(response.json()["ai_generations"]["limit"], 3)
         self.assertEqual(response.json()["ai_generations"]["remaining"], 2)
+
+    def test_testing_background_failure_releases_reserved_usage(self):
+        reservation = reserve_ai_generation(self.user_a.id)
+        with get_db_session() as session:
+            course = Course(user_id=self.user_a.id, name="Signals")
+            session.add(course)
+            session.flush()
+            package = LearningPackage(course_id=course.id, status="pending", content_json={}, usage_record_id=reservation.id)
+            session.add(package)
+            session.flush()
+            package_id = package.id
+            course_id = course.id
+
+        with patch("src.api.routers.course_space.run_queued_course_package", side_effect=RuntimeError("model unavailable")):
+            from src.api.routers.course_space import _run_generation_background_task
+
+            _run_generation_background_task(package_id, course_id, self.user_a.id)
+
+        self.assertEqual(get_ai_generation_usage(self.user_a.id), 0)
 
     def _authenticate_as(self, user):
         self.app.dependency_overrides[require_current_user] = lambda: user

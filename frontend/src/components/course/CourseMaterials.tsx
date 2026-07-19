@@ -8,7 +8,7 @@ import { Button } from '../ui/Button'
 import { Card } from '../ui/Card'
 import { StatePanel } from '../ui/StatePanel'
 import { UploadDocumentDialog } from './UploadDocumentDialog'
-import { PRIMARY_UPLOAD_CATEGORIES, type DocumentType } from './uploadCategories'
+import { UPLOAD_CATEGORIES, type DocumentType } from './uploadCategories'
 
 const categoryIcons = {
   TEXTBOOK: BookOpen,
@@ -19,10 +19,27 @@ const categoryIcons = {
   OTHER: Files,
 } as const
 
-export function CourseMaterials({ courseId, documents }: { courseId: string | undefined; documents: DocumentSummary[] }) {
+export function CourseMaterials({
+  courseId,
+  documents,
+  allowedDocumentTypes,
+  chapterId,
+  title = '学习资料',
+  description = '这些资料将作为当前学习场景的分析依据。',
+  showDocumentList = true,
+}: {
+  courseId: string | undefined
+  documents: DocumentSummary[]
+  allowedDocumentTypes: DocumentType[]
+  chapterId?: number | null
+  title?: string
+  description?: string
+  showDocumentList?: boolean
+}) {
   const [uploadOpen, setUploadOpen] = useState(false)
-  const [uploadType, setUploadType] = useState<DocumentType>('TEXTBOOK')
+  const [uploadType, setUploadType] = useState<DocumentType>(allowedDocumentTypes[0])
   const deleteDocument = useDeleteDocument(courseId)
+  const uploadCategories = UPLOAD_CATEGORIES.filter((category) => allowedDocumentTypes.includes(category.type))
 
   function openUpload(documentType: DocumentType) {
     setUploadType(documentType)
@@ -34,15 +51,15 @@ export function CourseMaterials({ courseId, documents }: { courseId: string | un
       <Card className="p-5 sm:p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-blue-600">Materials</p>
-            <h2 className="mt-1 text-xl font-semibold text-slate-950">课程资料</h2>
-            <p className="mt-1 text-sm text-slate-500">这些资料将作为课程内容整理和理解辅助的基础。</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-blue-600">学习资料</p>
+            <h2 className="mt-1 text-xl font-semibold text-slate-950">{title}</h2>
+            <p className="mt-1 text-sm text-slate-500">{description}</p>
           </div>
-          <Button variant="secondary" onClick={() => openUpload('TEXTBOOK')}><FilePlus2 className="size-4" /> 上传教材</Button>
+          {uploadCategories.length === 1 ? <Button variant="secondary" onClick={() => openUpload(uploadCategories[0].type)}><FilePlus2 className="size-4" /> {uploadCategories[0].action}</Button> : null}
         </div>
 
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {PRIMARY_UPLOAD_CATEGORIES.map((category) => {
+        {uploadCategories.length > 1 ? <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {uploadCategories.map((category) => {
             const Icon = categoryIcons[category.type]
             return (
               <button
@@ -59,17 +76,17 @@ export function CourseMaterials({ courseId, documents }: { courseId: string | un
               </button>
             )
           })}
-        </div>
+        </div> : null}
 
-        {documents.length === 0 ? (
+        {showDocumentList && documents.length === 0 ? (
           <div className="mt-5">
             <StatePanel
               variant="empty"
-              title="添加第一份课程资料"
-              description="从上方选择资料类别。建议先上传教材或课件，再补充笔记和试卷。"
+              title="添加第一份学习资料"
+              description="从上方选择与当前学习场景对应的资料类别。"
             />
           </div>
-        ) : (
+        ) : showDocumentList ? (
           <div className="mt-5 space-y-3">
             {documents.map((document) => (
               <FileCard
@@ -80,13 +97,15 @@ export function CourseMaterials({ courseId, documents }: { courseId: string | un
               />
             ))}
           </div>
-        )}
+        ) : null}
         {deleteDocument.isError ? <p className="mt-3 text-sm text-orange-700">资料删除失败，请刷新后重试。</p> : null}
       </Card>
       <UploadDocumentDialog
         courseId={courseId}
         open={uploadOpen}
         initialDocumentType={uploadType}
+        allowedDocumentTypes={allowedDocumentTypes}
+        chapterId={chapterId}
         onClose={() => setUploadOpen(false)}
       />
     </section>

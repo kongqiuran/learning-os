@@ -101,6 +101,19 @@ def release_ai_generation(reservation):
         )
 
 
+def release_ai_generation_by_record_id(user_id, record_id):
+    if record_id is None:
+        return
+    with get_db_session() as session:
+        session.execute(
+            delete(UsageRecord).where(
+                UsageRecord.id == int(record_id),
+                UsageRecord.user_id == int(user_id),
+                UsageRecord.metric == AI_GENERATION_METRIC,
+            )
+        )
+
+
 def get_ai_generation_usage(user_id, now=None):
     current_time = _as_utc(now or datetime.now(timezone.utc))
     period_key = current_time.strftime("%Y-%m")

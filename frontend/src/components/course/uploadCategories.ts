@@ -24,13 +24,6 @@ export const UPLOAD_CATEGORIES: UploadCategory[] = [
     primary: true,
   },
   {
-    type: 'NOTES',
-    label: '补充资料',
-    action: '上传补充资料',
-    description: '电子笔记、讲义或其他辅助材料',
-    primary: false,
-  },
-  {
     type: 'EXAM',
     label: '试卷',
     action: '上传试卷',
@@ -54,3 +47,9 @@ export const UPLOAD_CATEGORIES: UploadCategory[] = [
 ]
 
 export const PRIMARY_UPLOAD_CATEGORIES = UPLOAD_CATEGORIES.filter((category) => category.primary)
+
+export const SCENE_UPLOAD_TYPES: Record<'follow' | 'textbook' | 'exam', DocumentType[]> = {
+  follow: ['SLIDES', 'HOMEWORK', 'OTHER'],
+  textbook: ['TEXTBOOK'],
+  exam: ['EXAM', 'HOMEWORK'],
+}

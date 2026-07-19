@@ -1,11 +1,10 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router-dom'
 
 import { ProtectedRoute } from '../components/auth/ProtectedRoute'
 import { AppShell } from '../components/layout/AppShell'
 import { CourseSpacePage } from '../pages/CourseSpacePage'
 import { DashboardPage } from '../pages/DashboardPage'
 import { DemoPage } from '../pages/DemoPage'
-import { KnowledgeWorkspacePage } from '../pages/KnowledgeWorkspacePage'
 import { KnowledgeDetailPage } from '../pages/KnowledgeDetailPage'
 import { LegalPage } from '../pages/LegalPage'
 import { LoginPage } from '../pages/LoginPage'
@@ -30,7 +29,7 @@ export function AppRouter() {
             <Route path="/courses/:courseId/follow" element={<CourseSpacePage scene="follow" />} />
             <Route path="/courses/:courseId/textbooks" element={<CourseSpacePage scene="textbook" />} />
             <Route path="/courses/:courseId/exam" element={<CourseSpacePage scene="exam" />} />
-            <Route path="/courses/:courseId/knowledge" element={<KnowledgeWorkspacePage />} />
+            <Route path="/courses/:courseId/knowledge" element={<LegacyKnowledgeRedirect />} />
             <Route path="/courses/:courseId/knowledge/:knowledgeId" element={<KnowledgeDetailPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/pricing" element={<PricingPage />} />
@@ -40,4 +39,9 @@ export function AppRouter() {
       </Routes>
     </BrowserRouter>
   )
+}
+
+function LegacyKnowledgeRedirect() {
+  const { courseId } = useParams()
+  return <Navigate to={`/courses/${courseId}/textbooks`} replace />
 }

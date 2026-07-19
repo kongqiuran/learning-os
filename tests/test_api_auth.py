@@ -62,8 +62,9 @@ class ApiAuthenticationTest(unittest.TestCase):
                 "/api/auth/register",
                 json={
                     "email": user.email,
-                    "password": "secret",
-                    "confirm_password": "secret",
+                    "password": "secret12",
+                    "confirm_password": "secret12",
+                    "accepted_terms": True,
                 },
             )
         self.assertEqual(response.status_code, 201)
@@ -90,12 +91,29 @@ class ApiAuthenticationTest(unittest.TestCase):
                 "/api/auth/register",
                 json={
                     "email": "existing@example.com",
-                    "password": "secret",
-                    "confirm_password": "secret",
+                    "password": "secret12",
+                    "confirm_password": "secret12",
+                    "accepted_terms": True,
                 },
             )
         self.assertEqual(response.status_code, 409)
         self.assertEqual(response.json()["error"]["code"], "email_registered")
+
+    def test_registration_requires_terms_consent(self):
+        response = self.client.post(
+            "/api/auth/register",
+            json={"email": "terms@example.com", "password": "password", "confirm_password": "password"},
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["error"]["code"], "terms_consent_required")
+
+    def test_registration_rejects_short_password(self):
+        response = self.client.post(
+            "/api/auth/register",
+            json={"email": "weak@example.com", "password": "short", "confirm_password": "short", "accepted_terms": True},
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["error"]["code"], "weak_password")
 
     def test_me_requires_authentication(self):
         response = self.client.get("/api/auth/me")

@@ -19,8 +19,8 @@ export function useCourseSpace(courseId: string | undefined) {
 export function useUploadDocument(courseId: string | undefined) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ file, documentType }: { file: File; documentType: string }) =>
-      api.uploadDocument(courseId!, file, documentType),
+    mutationFn: ({ file, documentType, chapterId }: { file: File; documentType: string; chapterId?: number | null }) =>
+      api.uploadDocument(courseId!, file, documentType, chapterId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: courseSpaceQueryKey(courseId) }),
   })
 }
@@ -72,9 +72,13 @@ export function useGenerationTask(courseId: string | undefined, packageId: numbe
       return
     }
 
-    queryClient.setQueryData<CourseSpaceResponse>(courseSpaceQueryKey(courseId), (current) =>
-      current ? { ...current, learning_package: task } : current,
-    )
+    queryClient.setQueryData<CourseSpaceResponse>(courseSpaceQueryKey(courseId), (current) => {
+      if (!current) return current
+      if (task.scene === 'follow' || task.scene === 'textbook' || task.scene === 'exam') {
+        return { ...current, scene_packages: { ...current.scene_packages, [task.scene]: task } }
+      }
+      return { ...current, learning_package: task }
+    })
     void queryClient.invalidateQueries({ queryKey: courseSpaceQueryKey(courseId) })
   }, [courseId, generationTask.data, queryClient])
 

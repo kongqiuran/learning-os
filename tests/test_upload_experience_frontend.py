@@ -22,12 +22,13 @@ class UploadExperienceFrontendContractTest(unittest.TestCase):
             self.assertIn(f"type: '{document_type}'", categories)
             self.assertIn(f"action: '{action}'", categories)
 
-    def test_course_materials_exposes_all_primary_category_entries(self):
+    def test_course_materials_limits_entries_to_current_scene(self):
         materials = (
             FRONTEND_SOURCE / "components" / "course" / "CourseMaterials.tsx"
         ).read_text(encoding="utf-8")
 
-        self.assertIn("PRIMARY_UPLOAD_CATEGORIES.map", materials)
+        self.assertIn("allowedDocumentTypes", materials)
+        self.assertIn("UPLOAD_CATEGORIES.filter", materials)
         self.assertIn("openUpload(category.type)", materials)
         self.assertIn("initialDocumentType={uploadType}", materials)
 
@@ -37,7 +38,8 @@ class UploadExperienceFrontendContractTest(unittest.TestCase):
         ).read_text(encoding="utf-8")
         api = (FRONTEND_SOURCE / "lib" / "api.ts").read_text(encoding="utf-8")
 
-        self.assertIn("{ file, documentType }", dialog)
+        self.assertIn("{ file, documentType, chapterId }", dialog)
+        self.assertIn("allowedDocumentTypes.includes", dialog)
         self.assertIn("setDocumentType(category.type)", dialog)
         self.assertNotIn("<select", dialog)
         self.assertIn("body.append('document_type', documentType)", api)

@@ -26,6 +26,8 @@ export function LearningPackageView({
   onGenerate,
   onSelectSection,
   allowedSections,
+  showInitialGenerate = true,
+  emptyDescription,
 }: {
   learningPackage: LearningPackage | null
   generating: boolean
@@ -33,16 +35,20 @@ export function LearningPackageView({
   onGenerate: () => void
   onSelectSection: (section: string) => void
   allowedSections?: string[]
+  showInitialGenerate?: boolean
+  emptyDescription?: string
 }) {
   const isLoading = generating || learningPackage?.status === 'pending' || learningPackage?.status === 'processing'
 
   if (!isLoading && learningPackage?.status === 'failed') {
-    const diagnostics = [
-      learningPackage.current_stage ? `阶段：${learningPackage.current_stage}` : null,
-      learningPackage.error_type ? `原因：${learningPackage.error_type}` : null,
-      `尝试次数：${learningPackage.retry_count + 1}/3`,
-    ].filter(Boolean).join('；')
-    return <StatePanel variant="error" title="上次整理没有完成" description={`${diagnostics}。请从左侧重新整理课程内容。`} />
+    return (
+      <StatePanel
+        variant="error"
+        title="这次整理没有完成"
+        description="服务暂时不可用或资料处理遇到问题。本次不会扣除额度，你可以直接重新整理。"
+        action={<Button onClick={onGenerate}>重新整理</Button>}
+      />
+    )
   }
 
   const completedPackage = learningPackage?.status === 'completed' ? learningPackage : null
@@ -66,13 +72,18 @@ export function LearningPackageView({
               </div>
               <span className="inline-flex items-center gap-2 rounded-xl bg-violet-50 px-3 py-2 text-xs font-medium text-violet-700"><Sparkles className="size-3.5" /> 基于当前课程资料</span>
             </Card>
+            {sections.length > 1 ? (
+              <nav className="sticky top-20 z-10 flex gap-2 overflow-x-auto rounded-2xl border border-stone-200 bg-[#fffdfa]/95 p-3 shadow-sm backdrop-blur" aria-label="AI 整理内容目录">
+                {sections.map(([key]) => <a className="whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-teal-50 hover:text-teal-800" href={`#learning-section-${key}`} key={key}>{sectionLabels[key]}</a>)}
+              </nav>
+            ) : null}
             {sections.map(([key, value]) => (
-              <Card key={key} className="p-5 sm:p-6">
+              <Card key={key} id={`learning-section-${key}`} className="scroll-mt-36 p-5 sm:p-6">
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
                   <h3 className="text-lg font-semibold text-slate-950">{sectionLabels[key]}</h3>
                   <button type="button" className="text-xs font-medium text-violet-700 hover:text-violet-800" onClick={() => onSelectSection(sectionLabels[key])}>以此部分提问</button>
                 </div>
-                <div className="mt-5"><ContentValue value={value} /></div>
+                <div className="mx-auto mt-5 max-w-4xl"><ContentValue value={value} /></div>
               </Card>
             ))}
           </>
@@ -83,8 +94,8 @@ export function LearningPackageView({
         <StatePanel
           variant="empty"
           title="课程内容尚未整理"
-          description={canGenerate ? '资料已经准备好，可以让 AI 整理章节重点、公式和练习内容。' : '先上传一份教材或课件，再生成属于这门课程的学习内容。'}
-          action={canGenerate ? (
+          description={canGenerate ? '资料已经准备好，可以让 AI 整理当前场景的学习内容。' : (emptyDescription ?? '先上传当前场景需要的资料，再开始 AI 整理。')}
+          action={canGenerate && showInitialGenerate ? (
             <Button variant="ai" onClick={onGenerate}><Sparkles className="size-4" /> 开始整理课程内容</Button>
           ) : null}
         />

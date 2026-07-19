@@ -1,4 +1,4 @@
-import { BookOpen, CircleUserRound, CreditCard, FlaskConical, LayoutDashboard, Plus } from 'lucide-react'
+import { BookOpen, CircleUserRound, CreditCard, FlaskConical, LayoutDashboard } from 'lucide-react'
 import { NavLink, useNavigate } from 'react-router-dom'
 
 import { Button } from '../ui/Button'
@@ -36,18 +36,7 @@ export function Sidebar({ onNavigate }: SidebarProps) {
         </span>
       </button>
 
-      <Button
-        className="mt-7"
-        fullWidth
-        onClick={() => {
-          navigate('/dashboard?create=1')
-          onNavigate?.()
-        }}
-      >
-        <Plus className="size-4" /> 创建学习空间
-      </Button>
-
-      <nav className="mt-6 space-y-1" aria-label="主导航">
+      <nav className="mt-8 space-y-1" aria-label="主导航">
         {navigation.map(({ to, label, icon: Icon }) => (
           <NavLink
             key={to}
