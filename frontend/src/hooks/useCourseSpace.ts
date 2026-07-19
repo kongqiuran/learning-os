@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api } from '../lib/api'
-import type { AssistantQueryInput } from '../types/api'
+import type { AssistantQueryInput, CourseSpaceResponse } from '../types/api'
 
 export const courseSpaceQueryKey = (courseId: string | undefined) => ['course-space', courseId] as const
 export const generationTaskQueryKey = (courseId: string | undefined, packageId: number | null) =>
@@ -67,11 +67,16 @@ export function useGenerationTask(courseId: string | undefined, packageId: numbe
   })
 
   useEffect(() => {
-    const status = generationTask.data?.status
-    if (status === 'completed' || status === 'failed') {
-      void queryClient.invalidateQueries({ queryKey: courseSpaceQueryKey(courseId) })
+    const task = generationTask.data
+    if (!task || (task.status !== 'completed' && task.status !== 'failed')) {
+      return
     }
-  }, [courseId, generationTask.data?.status, queryClient])
+
+    queryClient.setQueryData<CourseSpaceResponse>(courseSpaceQueryKey(courseId), (current) =>
+      current ? { ...current, learning_package: task } : current,
+    )
+    void queryClient.invalidateQueries({ queryKey: courseSpaceQueryKey(courseId) })
+  }, [courseId, generationTask.data, queryClient])
 
   return generationTask
 }

@@ -20,32 +20,31 @@ export function CourseSpacePage() {
   const [currentSection, setCurrentSection] = useState('')
   const [generationTaskId, setGenerationTaskId] = useState<number | null>(null)
   const generationTask = useGenerationTask(courseId, generationTaskId)
-  const refetchCourseSpace = courseSpace.refetch
+  const latestLearningPackage = courseSpace.data?.learning_package
 
   useEffect(() => {
-    const latestPackage = courseSpace.data?.learning_package
     if (
       generationTaskId === null &&
-      latestPackage &&
-      (latestPackage.status === 'pending' || latestPackage.status === 'processing')
+      latestLearningPackage &&
+      (latestLearningPackage.status === 'pending' || latestLearningPackage.status === 'processing')
     ) {
-      setGenerationTaskId(latestPackage.id)
+      setGenerationTaskId(latestLearningPackage.id)
     }
-  }, [courseSpace.data?.learning_package, generationTaskId])
+  }, [generationTaskId, latestLearningPackage])
 
   useEffect(() => {
-    const status = generationTask.data?.status
-    if (status === 'completed' || status === 'failed') {
-      void refetchCourseSpace()
+    const task = generationTask.data
+    const isTerminal = task?.status === 'completed' || task?.status === 'failed'
+    const courseSpaceHasTask = latestLearningPackage?.id === task?.id && latestLearningPackage?.status === task?.status
+    if (isTerminal && courseSpaceHasTask) {
       setGenerationTaskId(null)
     }
-  }, [generationTask.data?.status, refetchCourseSpace])
+  }, [generationTask.data, latestLearningPackage])
 
-  if (courseSpace.isPending) {
-    return <StatePanel variant="loading" title="正在打开课程学习空间" />
-  }
-
-  if (courseSpace.isError) {
+  if (!courseSpace.data) {
+    if (courseSpace.isPending) {
+      return <StatePanel variant="loading" title="正在打开课程学习空间" />
+    }
     return (
       <StatePanel
         variant="error"
