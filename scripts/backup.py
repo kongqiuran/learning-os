@@ -16,14 +16,17 @@ from src.config import DATA_DIR, UPLOAD_DIR
 from src.database.connection import DATABASE_URL
 from src.ops import send_alert
 
+
 GIB = 1024 * 1024 * 1024
 
 
 def sha256(path):
     digest = hashlib.sha256()
+
     with path.open("rb") as stream:
         for block in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(block)
+
     return digest.hexdigest()
 
 
@@ -31,56 +34,172 @@ def main():
     bucket = os.environ["BACKUP_S3_BUCKET"]
     prefix = os.getenv("BACKUP_S3_PREFIX", "learning-os").strip("/")
     endpoint = os.getenv("BACKUP_S3_ENDPOINT") or None
+
     database_path = Path(DATABASE_URL.removeprefix("sqlite:///"))
+
     now = datetime.now(timezone.utc)
     stamp = now.strftime("%Y%m%dT%H%M%SZ")
+
     with tempfile.TemporaryDirectory(prefix="learning-os-backup-") as temp:
         root = Path(temp)
+
         snapshot = root / "learning_os.db"
+
+        # SQLite一致性快照
         source = sqlite3.connect(database_path)
         target = sqlite3.connect(snapshot)
+
         source.backup(target)
-        target.close(); source.close()
+
+        target.close()
+        source.close()
+
+
+        # 打包数据库和上传文件
         archive = root / f"learning-os-{stamp}.tar.gz"
+
         with tarfile.open(archive, "w:gz") as tar:
-            tar.add(snapshot, arcname="database/learning_os.db")
-            if UPLOAD_DIR.exists(): tar.add(UPLOAD_DIR, arcname="uploads")
+            tar.add(
+                snapshot,
+                arcname="database/learning_os.db"
+            )
+
+            if UPLOAD_DIR.exists():
+                tar.add(
+                    UPLOAD_DIR,
+                    arcname="uploads"
+                )
+
+
         checksum = sha256(archive)
+
         key = f"{prefix}/daily/{archive.name}"
 
-        client = boto3.client("s3", endpoint_url=endpoint)
+
+        # COS客户端
+        client = boto3.client(
+            "s3",
+            endpoint_url=endpoint
+        )
+
+
+        # 避免腾讯COS multipart兼容问题
         config = TransferConfig(
             multipart_threshold=GIB,
             multipart_chunksize=GIB,
         )
 
+
+        # 上传
         client.upload_file(
             str(archive),
             bucket,
             key,
             ExtraArgs={
-                "Metadata": {"sha256": checksum},
+                "Metadata": {
+                    "sha256": checksum
+                },
                 "ServerSideEncryption": "AES256",
             },
             Config=config,
         )
-        head = client.head_object(Bucket=bucket, Key=key)
+
+
+        # 校验上传结果
+        head = client.head_object(
+            Bucket=bucket,
+            Key=key
+        )
+
+
         if head.get("Metadata", {}).get("sha256") != checksum:
-            raise RuntimeError("Backup checksum metadata verification failed.")
+            raise RuntimeError(
+                "Backup checksum metadata verification failed."
+            )
+
+
+        # 每月1号复制月备份
         if now.day == 1:
-            client.copy_object(Bucket=bucket, CopySource={"Bucket": bucket, "Key": key}, Key=f"{prefix}/monthly/{archive.name}", ServerSideEncryption="AES256", MetadataDirective="COPY")
-        prune(client, bucket, f"{prefix}/daily/", 30)
-        prune(client, bucket, f"{prefix}/monthly/", 12)
-        print(f"Backup uploaded: s3://{bucket}/{key} sha256={checksum}")
+
+            client.copy_object(
+                Bucket=bucket,
+                CopySource={
+                    "Bucket": bucket,
+                    "Key": key
+                },
+                Key=f"{prefix}/monthly/{archive.name}",
+                ServerSideEncryption="AES256",
+                MetadataDirective="COPY"
+            )
+
+
+        # 清理旧备份
+        prune(
+            client,
+            bucket,
+            f"{prefix}/daily/",
+            30
+        )
+
+        prune(
+            client,
+            bucket,
+            f"{prefix}/monthly/",
+            12
+        )
+
+
+        print(
+            f"Backup uploaded: s3://{bucket}/{key} sha256={checksum}"
+        )
+
 
 
 def prune(client, bucket, prefix, keep):
-    objects = sorted(client.list_objects_v2(Bucket=bucket, Prefix=prefix).get("Contents", []), key=lambda item: item["LastModified"], reverse=True)
-    for item in objects[keep:]: client.delete_object(Bucket=bucket, Key=item["Key"])
+
+    try:
+
+        response = client.list_objects_v2(
+            Bucket=bucket,
+            Prefix=prefix
+        )
+
+
+        objects = sorted(
+            response.get("Contents", []),
+            key=lambda item: item["LastModified"],
+            reverse=True
+        )
+
+
+        for item in objects[keep:]:
+
+            client.delete_object(
+                Bucket=bucket,
+                Key=item["Key"]
+            )
+
+
+    except Exception as exc:
+
+        # 清理失败不能影响备份
+        print(
+            f"Skip prune {prefix}: {exc}"
+        )
+
 
 
 if __name__ == "__main__":
-    try: main()
+
+    try:
+        main()
+
     except Exception as exc:
-        send_alert("backup_failed", "Production backup failed", error=type(exc).__name__)
+
+        send_alert(
+            "backup_failed",
+            "Production backup failed",
+            error=type(exc).__name__
+        )
+
         raise
