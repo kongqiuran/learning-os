@@ -1,6 +1,7 @@
 import { BookOpenText, CircleAlert, Sparkles } from 'lucide-react'
 
 import type { LearningPackage } from '../../types/api'
+import { isTaskActive, taskStatus } from '../../lib/tasks'
 import { MarkdownContent } from '../ui/MarkdownContent'
 import { Button } from '../ui/Button'
 import { Card } from '../ui/Card'
@@ -40,9 +41,10 @@ export function LearningPackageView({
   showInitialGenerate?: boolean
   emptyDescription?: string
 }) {
-  const isLoading = generating || learningPackage?.status === 'pending' || learningPackage?.status === 'processing'
+  const status = taskStatus(learningPackage)
+  const isLoading = generating || isTaskActive(learningPackage)
 
-  if (!isLoading && learningPackage?.status === 'failed') {
+  if (!isLoading && status === 'FAILED') {
     return (
       <StatePanel
         variant="error"
@@ -53,9 +55,9 @@ export function LearningPackageView({
     )
   }
 
-  const completedPackage = learningPackage?.status === 'completed'
+  const completedPackage = status === 'SUCCESS'
     ? learningPackage
-    : previousPackage?.status === 'completed'
+    : taskStatus(previousPackage) === 'SUCCESS'
       ? previousPackage
       : null
   const sections = completedPackage
@@ -67,12 +69,12 @@ export function LearningPackageView({
   return (
     <div className="space-y-4">
       {isLoading && !completedPackage ? (
-        <StatePanel variant="loading" title={getProgressCopy(learningPackage?.current_stage).title} description={getProgressCopy(learningPackage?.current_stage).description} />
+        <StatePanel variant="loading" title={getProgressCopy(learningPackage?.task?.current_stage ?? learningPackage?.current_stage).title} description={progressDescription(learningPackage)} />
       ) : completedPackage ? (
         sections.length > 0 ? (
           <>
             {isLoading ? (
-              <StatePanel variant="loading" title={getProgressCopy(learningPackage?.current_stage).title} description="旧结果仍可查看；新结果完成后会自动替换，不需要停留在当前页面。" />
+              <StatePanel variant="loading" title={getProgressCopy(learningPackage?.task?.current_stage ?? learningPackage?.current_stage).title} description={`旧结果仍可查看；新结果完成后会自动替换。当前进度 ${learningPackage?.task?.progress ?? 0}%。`} />
             ) : null}
             {completedPackage.is_stale && !isLoading ? (
               <StatePanel
@@ -170,8 +172,19 @@ function formatDateTime(value: string) {
   return new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(value))
 }
 
+function progressDescription(learningPackage: LearningPackage | null) {
+  const stage = learningPackage?.task?.current_stage ?? learningPackage?.current_stage
+  const description = getProgressCopy(stage).description
+  return learningPackage?.task ? `${description} 当前进度 ${learningPackage.task.progress}%。` : description
+}
+
 function getProgressCopy(stage: string | null | undefined) {
   const stages: Record<string, { title: string; description: string }> = {
+    queued: { title: '已进入整理队列', description: '任务已提交，通常会很快开始。你可以切换章节或离开此页面。' },
+    preparing: { title: '正在准备当前内容', description: '正在确认资料范围和任务配置。' },
+    document_analysis: { title: '正在分析课程资料', description: '正在读取文件并提取可用于学习的知识点。' },
+    knowledge_generation: { title: '正在生成知识结构', description: '资料分析已完成，正在组织知识块和课程重点。' },
+    content_generation: { title: '正在生成整理结果', description: '知识结构已就绪，正在生成最终可阅读内容。' },
     pending: { title: '已进入整理队列', description: '任务已提交，通常会很快开始。你可以切换章节或离开此页面。' },
     recovered: { title: '正在恢复整理任务', description: '系统正在自动恢复任务，不需要重新点击。' },
     retry_queued: { title: '正在自动重试', description: '刚才的处理暂时中断，系统已自动重试，本次不会重复扣除额度。' },

@@ -15,6 +15,7 @@ from src.services.analysis_service import analyze_course
 from src.config import DATA_DIR
 from src.ops import send_alert
 from src.services.quota_settlement_service import release_package_quota, settle_package_quota
+from src.services.task_service import sync_package_task
 
 
 logging.basicConfig(level=logging.INFO, format='{"time":"%(asctime)s","level":"%(levelname)s","message":"%(message)s"}')
@@ -52,6 +53,9 @@ def _recover_stale():
                 if task.task_attempts < 2:
                     task.status = "pending"
                     task.current_stage = "recovered"
+                    course = session.get(Course, task.course_id)
+                    if course is not None:
+                        sync_package_task(session, task, course.user_id, status="PENDING", stage="recovered")
                 else:
                     _fail_and_refund(session, task, "worker_lost", "Worker heartbeat expired twice.")
 
@@ -85,6 +89,9 @@ def _claim_next():
         course = session.get(Course, claimed.course_id)
         if course is None:
             return None
+        package = session.get(LearningPackage, claimed.id)
+        if package is not None:
+            sync_package_task(session, package, course.user_id, status="RUNNING", stage="starting")
         return (claimed.id, claimed.course_id, course.user_id, claimed.scene, claimed.scope_document_id, claimed.scope_chapter_id, claimed.scope_unassigned)
 
 
@@ -95,6 +102,9 @@ def _heartbeat(task_id):
             if task is None or task.status != "processing":
                 return
             task.heartbeat_at = datetime.now(timezone.utc)
+            course = session.get(Course, task.course_id)
+            if course is not None:
+                sync_package_task(session, task, course.user_id, status="RUNNING", stage=task.current_stage)
 
 
 def _fail_and_refund(session, task, error_type, detail):
@@ -102,6 +112,9 @@ def _fail_and_refund(session, task, error_type, detail):
     task.error_type = error_type
     task.error_detail = detail
     task.finished_at = datetime.now(timezone.utc)
+    course = session.get(Course, task.course_id)
+    if course is not None:
+        sync_package_task(session, task, course.user_id, status="FAILED", stage=task.current_stage, error_code=error_type, error_detail=detail)
     release_package_quota(session, task.id)
 
 
@@ -122,6 +135,7 @@ def _process_claimed(claimed):
                 else:
                     task.status = "pending"
                     task.current_stage = "retry_queued"
+                    sync_package_task(session, task, user_id, status="PENDING", stage="retry_queued")
         return
 
     try:

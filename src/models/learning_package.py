@@ -42,8 +42,10 @@ class LearningPackage(Base):
     claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     task_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    task_id: Mapped[int | None] = mapped_column(ForeignKey("tasks.id", ondelete="SET NULL"), unique=True, index=True, nullable=True)
     error_type: Mapped[str | None] = mapped_column(String(120), nullable=True)
     error_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 
     course: Mapped["Course"] = relationship(back_populates="learning_packages")
+    task: Mapped["Task | None"] = relationship(lazy="joined")

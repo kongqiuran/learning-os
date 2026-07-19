@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 from src.database import create_database_tables, get_db_session
 from src.billing.product_catalog import get_billing_product
-from src.models import CourseEntitlement, Document, LearningPackage, User
+from src.models import CourseEntitlement, Document, LearningPackage, Task, User
 from src.services.chapter_service import create_chapter, delete_chapter, move_document
 from src.services.course_service import create_course
 from src.services.entitlement_service import EntitlementQuotaExceeded, consume_assistant, consume_scene, get_active_entitlement, reserve_scene
@@ -109,6 +109,10 @@ class V2FeatureTest(unittest.TestCase):
         claimed = [item for item in results if item is not None]
         self.assertEqual(len(claimed), 1)
         self.assertEqual(claimed[0][0], package_id)
+        with get_db_session() as session:
+            stored = session.get(LearningPackage, package_id)
+            self.assertIsNotNone(stored.task_id)
+            self.assertEqual(session.get(Task, stored.task_id).status, "RUNNING")
 
 
 if __name__ == "__main__":

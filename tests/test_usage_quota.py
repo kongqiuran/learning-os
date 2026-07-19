@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from src.api.dependencies import require_current_user
 from src.api.factory import create_app
 from src.database import create_database_tables, get_db_session
-from src.models import Course, LearningPackage, UsageRecord, User, UserPlan
+from src.models import Course, LearningPackage, Task, UsageRecord, User, UserPlan
 from src.services.quota_service import (
     UsageQuotaExceededError,
     get_ai_generation_usage,
@@ -115,6 +115,13 @@ class UsageQuotaTest(unittest.TestCase):
             _run_generation_background_task(package_id, course_id, self.user_a.id)
 
         self.assertEqual(get_ai_generation_usage(self.user_a.id), 0)
+        with get_db_session() as session:
+            stored = session.get(LearningPackage, package_id)
+            self.assertEqual(stored.status, "failed")
+            self.assertIsNotNone(stored.task_id)
+            lifecycle = session.get(Task, stored.task_id)
+            self.assertEqual(lifecycle.status, "FAILED")
+            self.assertEqual(lifecycle.error_code, "RuntimeError")
 
     def _authenticate_as(self, user):
         self.app.dependency_overrides[require_current_user] = lambda: user

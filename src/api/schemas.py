@@ -201,6 +201,20 @@ class ChapterResponse(BaseModel):
     updated_at: datetime
 
 
+class TaskResponse(BaseModel):
+    id: int
+    task_type: str
+    status: str
+    progress: int
+    current_stage: str | None = None
+    error_code: str | None = None
+    error_detail: str | None = None
+    created_at: datetime
+    updated_at: datetime
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+
+
 class LearningPackageResponse(BaseModel):
     id: int
     status: str
@@ -220,6 +234,8 @@ class LearningPackageResponse(BaseModel):
     source_fingerprint: str | None = None
     prompt_version: str | None = None
     is_stale: bool = False
+    task_id: int | None = None
+    task: TaskResponse | None = None
 
 
 class CourseSpaceResponse(BaseModel):

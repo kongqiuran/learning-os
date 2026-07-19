@@ -46,10 +46,22 @@ class V2FrontendContractTest(unittest.TestCase):
         self.assertIn("scene_packages?.[scene] ?? legacyPackage", page)
         self.assertNotIn("scene_packages?.[scene] ?? courseSpace.data?.learning_package", page)
 
-    def test_pricing_discloses_allowances_and_failure_refund(self):
+    def test_pricing_uses_server_product_allowances_and_discloses_failure_refund(self):
         pricing = (ROOT / "pages" / "PricingPage.tsx").read_text(encoding="utf-8")
-        for disclosure in ("99 元", "跟课资料 AI 整理成功 3 次", "教材解析成功 3 次", "考试冲刺成功 3 次", "AI 助手问答 100 次", "失败、超时或系统中断自动返还", "不自动续费"):
+        for disclosure in ("useBillingProducts", "product.amount_cents", "product.follow_allowance", "product.textbook_allowance", "product.exam_allowance", "product.assistant_allowance", "失败、超时或系统中断", "不会自动扣款或续费"):
             self.assertIn(disclosure, pricing)
+        self.assertNotIn("99 元", pricing)
+        self.assertNotIn("window.alert", pricing)
+
+    def test_ai_progress_uses_unified_task_lifecycle(self):
+        types = (ROOT / "types" / "api.ts").read_text(encoding="utf-8")
+        task_helpers = (ROOT / "lib" / "tasks.ts").read_text(encoding="utf-8")
+        package_view = (ROOT / "components" / "course" / "LearningPackageView.tsx").read_text(encoding="utf-8")
+        for status in ("PENDING", "RUNNING", "SUCCESS", "FAILED"):
+            self.assertIn(status, types)
+            self.assertIn(status, task_helpers)
+        self.assertIn("learningPackage.task.progress", package_view)
+        self.assertIn("knowledge_generation", package_view)
 
 
 if __name__ == "__main__":

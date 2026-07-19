@@ -10,7 +10,7 @@ from src.api.schemas import HealthResponse
 from src.config import DATA_DIR, UPLOAD_DIR
 from src.database.connection import engine
 from src.database import get_db_session
-from src.models import LearningPackage
+from src.models import Task
 
 
 router = APIRouter(prefix="/api", tags=["system"])
@@ -49,5 +49,5 @@ def readiness():
 @router.get("/health/metrics")
 def task_metrics():
     with get_db_session() as session:
-        rows = session.execute(select(LearningPackage.status, func.count(LearningPackage.id)).group_by(LearningPackage.status)).all()
+        rows = session.execute(select(Task.status, func.count(Task.id)).group_by(Task.status)).all()
     return {"generation_tasks": {status: count for status, count in rows}}

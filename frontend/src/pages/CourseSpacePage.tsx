@@ -28,6 +28,7 @@ import { useCurrentUser } from '../hooks/useCurrentUser'
 import { useCourseKnowledge } from '../hooks/useKnowledge'
 import { api, ApiError } from '../lib/api'
 import { asCreditError, purchaseUrl } from '../lib/billing'
+import { isTaskActive } from '../lib/tasks'
 import type { Chapter, DocumentSummary, LearningPackage } from '../types/api'
 
 type Scene = 'follow' | 'textbook' | 'exam'
@@ -160,7 +161,7 @@ export function CourseSpacePage({ scene }: { scene: Scene }) {
   const taskMatchesSelection = task.data ? packageMatchesSelection(task.data, scene, selectedChapterId, selectedTextbookId) : false
   const requestMatchesSelection = generate.variables ? scopeMatchesSelection(generate.variables, scene, selectedChapterId, selectedTextbookId) : false
   const displayedPackage = taskMatchesSelection ? task.data! : scopedPackage
-  const isGenerating = (generate.isPending && requestMatchesSelection) || displayedPackage?.status === 'pending' || displayedPackage?.status === 'processing'
+  const isGenerating = (generate.isPending && requestMatchesSelection) || isTaskActive(displayedPackage)
 
   function openAssistant(question = '') {
     setAssistantQuestion(question)

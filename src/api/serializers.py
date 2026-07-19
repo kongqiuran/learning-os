@@ -5,6 +5,7 @@ from src.api.schemas import (
     ChapterResponse,
     DocumentResponse,
     LearningPackageResponse,
+    TaskResponse,
     KnowledgeDetailResponse,
     KnowledgeSummaryResponse,
 )
@@ -67,6 +68,26 @@ def serialize_learning_package(package):
         source_fingerprint=getattr(package, "source_fingerprint", None),
         prompt_version=getattr(package, "prompt_version", None),
         is_stale=bool(getattr(package, "is_stale", False)),
+        task_id=getattr(package, "task_id", None),
+        task=serialize_task(getattr(package, "task", None)),
+    )
+
+
+def serialize_task(task):
+    if task is None:
+        return None
+    return TaskResponse(
+        id=task.id,
+        task_type=task.task_type,
+        status=task.status,
+        progress=task.progress,
+        current_stage=task.current_stage,
+        error_code=task.error_code,
+        error_detail=task.error_detail,
+        created_at=task.created_at,
+        updated_at=task.updated_at,
+        started_at=task.started_at,
+        finished_at=task.finished_at,
     )
 
 

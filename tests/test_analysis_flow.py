@@ -10,7 +10,7 @@ TEST_DIR = tempfile.TemporaryDirectory()
 
 from src.database import create_database_tables, get_db_session  # noqa: E402
 from src.ai.llm_client import LLMGenerationError  # noqa: E402
-from src.models import Chapter, Course, Document, DocumentAnalysis, LearningPackage, User  # noqa: E402
+from src.models import Chapter, Course, Document, DocumentAnalysis, LearningPackage, Task, User  # noqa: E402
 from src.services.analysis_service import (  # noqa: E402
     _validate_document_course_binding,
     _load_course_documents,
@@ -20,6 +20,7 @@ from src.services.analysis_service import (  # noqa: E402
     get_scoped_packages,
 )
 from src.services.file_parser_service import extract_text  # noqa: E402
+from src.api.serializers import serialize_learning_package  # noqa: E402
 from src.services.document_service import (  # noqa: E402
     delete_document_for_user,
     list_documents_for_course,
@@ -310,6 +311,9 @@ class AnalysisFlowTest(unittest.TestCase):
 
         task = create_learning_package_task(course_id, user_id)
         self.assertEqual(task.status, "pending")
+        self.assertIsNotNone(task.task_id)
+        self.assertEqual(task.task.status, "PENDING")
+        self.assertEqual(task.task.current_stage, "queued")
         result = analyze_course(
             course_id,
             user_id,
@@ -319,8 +323,16 @@ class AnalysisFlowTest(unittest.TestCase):
 
         self.assertEqual(result.id, task.id)
         self.assertEqual(result.status, "completed")
+        response = serialize_learning_package(get_learning_package(course_id, user_id))
+        self.assertEqual(response.task.status, "SUCCESS")
+        self.assertEqual(response.task.progress, 100)
         with get_db_session() as session:
             self.assertEqual(session.query(LearningPackage).count(), 1)
+            lifecycle = session.get(Task, task.task_id)
+            self.assertEqual(lifecycle.status, "SUCCESS")
+            self.assertEqual(lifecycle.progress, 100)
+            self.assertIsNotNone(lifecycle.started_at)
+            self.assertIsNotNone(lifecycle.finished_at)
 
     def test_failed_task_persists_stage_retry_and_error_detail(self):
         pdf_path = Path(TEST_DIR.name) / "failure.pdf"
@@ -345,6 +357,9 @@ class AnalysisFlowTest(unittest.TestCase):
         self.assertEqual(package.retry_count, 2)
         self.assertEqual(package.error_type, "JSONParseError")
         self.assertIn("broken output", package.error_detail)
+        self.assertEqual(package.task.status, "FAILED")
+        self.assertEqual(package.task.error_code, "JSONParseError")
+        self.assertIn("broken output", package.task.error_detail)
 
     def test_pdf_and_pptx_enter_analysis_flow(self):
         pdf_path = Path(TEST_DIR.name) / "formats.pdf"

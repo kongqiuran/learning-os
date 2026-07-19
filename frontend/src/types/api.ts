@@ -81,6 +81,22 @@ export interface LearningPackage {
   source_fingerprint: string | null
   prompt_version: string | null
   is_stale: boolean
+  task_id: number | null
+  task: AiTask | null
+}
+
+export interface AiTask {
+  id: number
+  task_type: string
+  status: 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED'
+  progress: number
+  current_stage: string | null
+  error_code: string | null
+  error_detail: string | null
+  created_at: string
+  updated_at: string
+  started_at: string | null
+  finished_at: string | null
 }
 
 export interface Chapter {

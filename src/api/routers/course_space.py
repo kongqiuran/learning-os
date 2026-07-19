@@ -47,6 +47,7 @@ from src.services.entitlement_service import (
     reserve_scene,
 )
 from src.services.quota_settlement_service import release_package_quota, settle_package_quota
+from src.services.task_service import fail_package_task
 
 
 router = APIRouter(prefix="/api/courses/{course_id}", tags=["course-space"])
@@ -254,9 +255,13 @@ def _run_generation_background_task(package_id, course_id, user_id, scene=None, 
         from src.database import get_db_session
         with get_db_session() as session:
             settle_package_quota(session, package_id)
-    except Exception:
+    except Exception as exc:
         from src.database import get_db_session
+        from src.models import LearningPackage
         with get_db_session() as session:
+            package = session.get(LearningPackage, package_id)
+            if package is not None and package.status != "failed":
+                fail_package_task(session, package, user_id, type(exc).__name__, str(exc) or type(exc).__name__)
             release_package_quota(session, package_id)
         logger.exception(
             "Course content generation task failed.",

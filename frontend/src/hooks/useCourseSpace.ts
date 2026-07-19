@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api, type UploadProgress } from '../lib/api'
+import { isTaskActive, taskStatus } from '../lib/tasks'
 import type { AssistantQueryInput, CourseSpaceResponse } from '../types/api'
 
 export const courseSpaceQueryKey = (courseId: string | undefined) => ['course-space', courseId] as const
@@ -24,7 +25,7 @@ function hasActiveGeneration(data: CourseSpaceResponse | undefined) {
     ...Object.values(data.chapter_packages),
     ...Object.values(data.document_packages),
   ]
-  return packages.some((item) => item?.status === 'pending' || item?.status === 'processing')
+  return packages.some(isTaskActive)
 }
 
 export function useUploadDocument(courseId: string | undefined) {
@@ -64,12 +65,12 @@ export function useGenerationTask(courseId: string | undefined, packageId: numbe
     queryFn: () => api.learningPackageTask(courseId!, packageId!),
     enabled: Boolean(courseId && packageId),
     refetchInterval: (query) => {
-      const status = query.state.data?.status
-      if (status === 'pending') {
+      const status = taskStatus(query.state.data)
+      if (status === 'PENDING') {
         return 1000
       }
 
-      if (status === 'processing') {
+      if (status === 'RUNNING') {
         return 2000
       }
 
@@ -79,7 +80,8 @@ export function useGenerationTask(courseId: string | undefined, packageId: numbe
 
   useEffect(() => {
     const task = generationTask.data
-    if (!task || (task.status !== 'completed' && task.status !== 'failed')) {
+    const status = taskStatus(task)
+    if (!task || (status !== 'SUCCESS' && status !== 'FAILED')) {
       return
     }
 
@@ -91,7 +93,7 @@ export function useGenerationTask(courseId: string | undefined, packageId: numbe
           return {
             ...current,
             chapter_packages: { ...current.chapter_packages, [key]: task },
-            chapter_completed_packages: task.status === 'completed' ? { ...current.chapter_completed_packages, [key]: task } : current.chapter_completed_packages,
+            chapter_completed_packages: status === 'SUCCESS' ? { ...current.chapter_completed_packages, [key]: task } : current.chapter_completed_packages,
           }
         }
         if (task.scene === 'textbook' && task.scope_document_id != null) {
@@ -99,13 +101,13 @@ export function useGenerationTask(courseId: string | undefined, packageId: numbe
           return {
             ...current,
             document_packages: { ...current.document_packages, [key]: task },
-            document_completed_packages: task.status === 'completed' ? { ...current.document_completed_packages, [key]: task } : current.document_completed_packages,
+            document_completed_packages: status === 'SUCCESS' ? { ...current.document_completed_packages, [key]: task } : current.document_completed_packages,
           }
         }
         return {
           ...current,
           scene_packages: { ...current.scene_packages, [task.scene]: task },
-          scene_completed_packages: task.status === 'completed' ? { ...current.scene_completed_packages, [task.scene]: task } : current.scene_completed_packages,
+          scene_completed_packages: status === 'SUCCESS' ? { ...current.scene_completed_packages, [task.scene]: task } : current.scene_completed_packages,
         }
       }
       return { ...current, learning_package: task }

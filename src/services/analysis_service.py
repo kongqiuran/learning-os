@@ -11,6 +11,7 @@ from src.config import get_max_chars_per_request
 from src.database import get_db_session
 from src.models import Course, Document, DocumentAnalysis, LearningPackage
 from src.services.file_parser_service import extract_text, get_source_type
+from src.services.task_service import create_package_task, sync_package_task
 
 
 class TenantIsolationError(ValueError):
@@ -122,6 +123,7 @@ def analyze_course(course_id, user_id, llm_client=None, language="zh", package_i
             stored_package.error_type = None
             stored_package.error_detail = None
             stored_package.finished_at = datetime.now(timezone.utc)
+            sync_package_task(session, stored_package, user_id, status="SUCCESS", stage="completed")
         package.status = "completed"
         package.content_json = content
         package.current_stage = "completed"
@@ -160,6 +162,15 @@ def analyze_course(course_id, user_id, llm_client=None, language="zh", package_i
                     "message": "Course content generation failed.",
                 }
             }
+            sync_package_task(
+                session,
+                stored_package,
+                user_id,
+                status="FAILED",
+                stage=stored_package.current_stage,
+                error_code=error_type,
+                error_detail=error_detail,
+            )
         raise
 
 
@@ -342,7 +353,12 @@ def _create_package(course_id, user_id, status, scene="legacy", scope_document_i
             quota_state="reserved" if quota_source else None,
             quota_reserved_at=datetime.now(timezone.utc) if quota_source else None,
         )
+        task = create_package_task(session, user_id, course_id, scene)
+        package.task = task
+        package.task_id = task.id
         session.add(package)
+        session.flush()
+        task.resource_id = package.id
         session.flush()
     return package
 
@@ -384,6 +400,7 @@ def _start_existing_package(package_id, course_id, user_id):
         package.retry_count = 0
         package.error_type = None
         package.error_detail = None
+        sync_package_task(session, package, user_id, status="RUNNING", stage="starting")
         session.flush()
     return package
 
@@ -393,6 +410,7 @@ def _update_package_progress(package_id, course_id, user_id, stage, retry_count)
         package = _require_scoped_package(session, package_id, course_id, user_id)
         package.current_stage = stage
         package.retry_count = int(retry_count)
+        sync_package_task(session, package, user_id, status="RUNNING", stage=stage)
 
 
 def _require_scoped_course(session, course_id, user_id):
@@ -473,7 +491,10 @@ def _get_or_create_document_analysis(
             select(DocumentAnalysis).where(DocumentAnalysis.document_id == document.id)
         )
         if existing is not None:
+            stored_document.processing_status = "completed"
             return _serialize_analysis(stored_document, existing)
+
+        stored_document.processing_status = "processing"
 
     try:
         text = extract_text(document.file_path, document.mime_type)
