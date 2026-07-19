@@ -5,7 +5,9 @@ from src.models.knowledge import Knowledge
 from src.models.knowledge_view import KnowledgeView
 from src.models.learning_package import LearningPackage
 from src.models.privacy_consent import PrivacyConsent
+from src.models.usage_record import UsageRecord
 from src.models.user import User
+from src.models.user_plan import UserPlan
 
 
 __all__ = [
@@ -17,4 +19,6 @@ __all__ = [
     "KnowledgeView",
     "LearningPackage",
     "PrivacyConsent",
+    "UsageRecord",
+    "UserPlan",
 ]

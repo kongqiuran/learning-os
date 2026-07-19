@@ -132,6 +132,10 @@ class CourseSpaceApiTest(unittest.TestCase):
         package = fake_package(status="pending")
         with (
             patch("src.api.routers.course_space.get_course_for_user", return_value=fake_course()),
+            patch(
+                "src.api.routers.course_space.reserve_ai_generation",
+                return_value=SimpleNamespace(id=40, user_id=self.user.id, period_key="2026-07"),
+            ) as reserve_usage,
             patch("src.api.routers.course_space.queue_course_package", return_value=package) as queue,
             patch("src.api.routers.course_space.run_queued_course_package") as run_task,
             patch(
@@ -148,6 +152,7 @@ class CourseSpaceApiTest(unittest.TestCase):
         self.assertEqual(generate_response.status_code, 202)
         self.assertEqual(generate_response.json()["status"], "pending")
         self.assertEqual(assistant_response.status_code, 200)
+        reserve_usage.assert_called_once_with(self.user.id)
         queue.assert_called_once_with(10, self.user.id)
         run_task.assert_called_once_with(30, 10, self.user.id)
         answer.assert_called_once_with(10, self.user.id, "Why?", "重点内容")

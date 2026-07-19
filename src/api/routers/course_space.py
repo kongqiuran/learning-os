@@ -31,6 +31,11 @@ from src.services.document_service import (
     list_documents_for_course,
     save_uploaded_document,
 )
+from src.services.quota_service import (
+    UsageQuotaExceededError,
+    release_ai_generation,
+    reserve_ai_generation,
+)
 
 
 router = APIRouter(prefix="/api/courses/{course_id}", tags=["course-space"])
@@ -93,17 +98,37 @@ def generate_learning_package(
 ):
     _require_course(course_id, user.id)
     try:
+        usage_reservation = reserve_ai_generation(user.id)
+    except UsageQuotaExceededError as exc:
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "code": "quota_exceeded",
+                "metric": "ai_generation",
+                "limit": exc.limit,
+                "used": exc.used,
+                "remaining": 0,
+                "resets_at": exc.resets_at.isoformat(),
+                "message": str(exc),
+            },
+        ) from exc
+    try:
         package = queue_course_package(course_id, user.id)
     except GenerationInProgressError as exc:
+        release_ai_generation(usage_reservation)
         raise HTTPException(
             status_code=409,
             detail={"code": "generation_in_progress", "message": str(exc)},
         ) from exc
     except ValueError as exc:
+        release_ai_generation(usage_reservation)
         raise HTTPException(
             status_code=400,
             detail={"code": "generation_failed", "message": str(exc)},
         ) from exc
+    except Exception:
+        release_ai_generation(usage_reservation)
+        raise
     background_tasks.add_task(
         _run_generation_background_task,
         package.id,
