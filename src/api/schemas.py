@@ -25,6 +25,17 @@ class AuthResponse(BaseModel):
     user: UserResponse
 
 
+class AccountDeletionRequest(BaseModel):
+    password: str = Field(min_length=1, max_length=256)
+    confirmation: str = Field(min_length=1, max_length=64)
+
+
+class AccountDeletionResponse(BaseModel):
+    deletion_id: str
+    status: str
+    message: str
+
+
 class MessageResponse(BaseModel):
     message: str
 

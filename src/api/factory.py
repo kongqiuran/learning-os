@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
 from src.api.errors import register_error_handlers
-from src.api.routers import auth, course_space, courses, health, knowledge
+from src.api.routers import account, auth, course_space, courses, health, knowledge
 
 
 BASE_DIR = Path(__file__).resolve().parents[2]
@@ -48,6 +48,7 @@ def create_app(session_secret=None):
     register_error_handlers(app)
     app.include_router(health.router)
     app.include_router(auth.router)
+    app.include_router(account.router)
     app.include_router(courses.router)
     app.include_router(course_space.router)
     app.include_router(knowledge.router)
