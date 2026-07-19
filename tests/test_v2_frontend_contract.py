@@ -40,6 +40,12 @@ class V2FrontendContractTest(unittest.TestCase):
         self.assertIn("重新整理", package)
         self.assertIn("onSelectSection={openAssistant}", page)
 
+    def test_scene_without_package_only_falls_back_to_legacy_package(self):
+        page = (ROOT / "pages" / "CourseSpacePage.tsx").read_text(encoding="utf-8")
+        self.assertIn("learning_package?.scene === 'legacy'", page)
+        self.assertIn("scene_packages?.[scene] ?? legacyPackage", page)
+        self.assertNotIn("scene_packages?.[scene] ?? courseSpace.data?.learning_package", page)
+
     def test_pricing_discloses_allowances_and_failure_refund(self):
         pricing = (ROOT / "pages" / "PricingPage.tsx").read_text(encoding="utf-8")
         for disclosure in ("99 元", "跟课资料 AI 整理成功 3 次", "教材解析成功 3 次", "考试冲刺成功 3 次", "AI 助手问答 100 次", "失败、超时或系统中断自动返还", "不自动续费"):

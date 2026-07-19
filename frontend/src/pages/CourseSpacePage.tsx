@@ -58,7 +58,8 @@ export function CourseSpacePage({ scene }: { scene: Scene }) {
   const [deleteChapter, setDeleteChapter] = useState<Chapter | null>(null)
   const [taskId, setTaskId] = useState<number | null>(null)
   const task = useGenerationTask(courseId, taskId)
-  const scenePackage = courseSpace.data?.scene_packages?.[scene] ?? courseSpace.data?.learning_package ?? null
+  const legacyPackage = courseSpace.data?.learning_package?.scene === 'legacy' ? courseSpace.data.learning_package : null
+  const scenePackage = courseSpace.data?.scene_packages?.[scene] ?? legacyPackage
 
   useEffect(() => {
     if (currentUser.data && courseId) {
