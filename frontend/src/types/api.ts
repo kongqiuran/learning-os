@@ -48,6 +48,7 @@ export interface DocumentSummary {
   file_size: number
   status: DocumentStatus
   document_type: string
+  chapter_id: number | null
   uploaded_at: string
 }
 
@@ -61,17 +62,33 @@ export interface LearningPackage {
   error_type: string | null
   error_detail: string | null
   created_at: string
+  scene: 'legacy' | 'follow' | 'textbook' | 'exam'
+  scope_document_id: number | null
+}
+
+export interface Chapter {
+  id: number
+  title: string
+  position: number
+  document_count: number
+  created_at: string
+  updated_at: string
 }
 
 export interface CourseSpaceResponse {
   course: CourseSummary
   documents: DocumentSummary[]
   learning_package: LearningPackage | null
+  chapters: Chapter[]
+  scene_packages: Partial<Record<'follow' | 'textbook' | 'exam', LearningPackage | null>>
 }
 
 export interface AssistantQueryInput {
   question: string
   current_section?: string
+  scene?: string
+  chapter_id?: number
+  textbook_id?: number
 }
 
 export interface AssistantQueryResponse {
@@ -123,6 +140,10 @@ export interface UsageSummaryResponse {
     remaining: number
     resets_at: string
   }
+  course_entitlements: Array<{
+    id: number; course_id: number; course_name: string; product_code: string; amount_cents: number; status: string
+    activated_at: string; expires_at: string; follow_remaining: number; textbook_remaining: number; exam_remaining: number; assistant_remaining: number
+  }>
 }
 
 export interface PrivacyPolicyCurrentResponse {

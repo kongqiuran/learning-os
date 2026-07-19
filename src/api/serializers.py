@@ -2,6 +2,7 @@ from src.api.schemas import (
     CourseDetailResponse,
     CourseSpaceResponse,
     CourseSummaryResponse,
+    ChapterResponse,
     DocumentResponse,
     LearningPackageResponse,
     KnowledgeDetailResponse,
@@ -38,6 +39,7 @@ def serialize_document(document):
         file_size=document.file_size,
         status=document.processing_status,
         document_type=document.document_type,
+        chapter_id=getattr(document, "chapter_id", None),
         uploaded_at=document.uploaded_at,
     )
 
@@ -56,14 +58,18 @@ def serialize_learning_package(package):
         error_type=getattr(package, "error_type", None),
         error_detail=getattr(package, "error_detail", None),
         created_at=package.created_at,
+        scene=getattr(package, "scene", "legacy") or "legacy",
+        scope_document_id=getattr(package, "scope_document_id", None),
     )
 
 
-def serialize_course_space(course, documents, learning_package):
+def serialize_course_space(course, documents, learning_package, chapters=None, scene_packages=None):
     return CourseSpaceResponse(
         course=serialize_course_detail(course, documents, learning_package),
         documents=[serialize_document(document) for document in documents],
         learning_package=serialize_learning_package(learning_package),
+        chapters=[ChapterResponse(id=item.id, title=item.title, position=item.position, document_count=sum(1 for document in documents if getattr(document, "chapter_id", None) == item.id), created_at=item.created_at, updated_at=item.updated_at) for item in (chapters or [])],
+        scene_packages={key: serialize_learning_package(value) for key, value in (scene_packages or {}).items()},
     )
 
 

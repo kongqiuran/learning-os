@@ -8,6 +8,7 @@ import type {
   CourseListResponse,
   CourseSummary,
   CourseSpaceResponse,
+  Chapter,
   DashboardResponse,
   DocumentSummary,
   LearningPackage,
@@ -110,16 +111,23 @@ export const api = {
     request<{ message: string }>(`/api/courses/${courseId}`, { method: 'DELETE' }),
   courseSpace: (courseId: number | string) =>
     request<CourseSpaceResponse>(`/api/courses/${courseId}/space`),
-  uploadDocument: (courseId: number | string, file: File, documentType: string) => {
+  uploadDocument: (courseId: number | string, file: File, documentType: string, chapterId?: number | null) => {
     const body = new FormData()
     body.append('file', file)
     body.append('document_type', documentType)
+    if (chapterId != null) body.append('chapter_id', String(chapterId))
     return request<DocumentSummary>(`/api/courses/${courseId}/documents`, { method: 'POST', body })
   },
   deleteDocument: (courseId: number | string, documentId: number) =>
     request<{ message: string }>(`/api/courses/${courseId}/documents/${documentId}`, { method: 'DELETE' }),
   generateLearningPackage: (courseId: number | string) =>
     request<LearningPackage>(`/api/courses/${courseId}/learning-package/generate`, { method: 'POST' }),
+  generateScene: (courseId: number | string, scene: string, scopeDocumentId?: number) =>
+    request<LearningPackage>(`/api/courses/${courseId}/generations/${scene}${scopeDocumentId ? `?scope_document_id=${scopeDocumentId}` : ''}`, { method: 'POST' }),
+  createChapter: (courseId: number | string, title: string) => request<Chapter>(`/api/courses/${courseId}/chapters`, { method: 'POST', body: JSON.stringify({ title }) }),
+  updateChapter: (courseId: number | string, chapterId: number, input: { title?: string; position?: number }) => request<Chapter>(`/api/courses/${courseId}/chapters/${chapterId}`, { method: 'PATCH', body: JSON.stringify(input) }),
+  deleteChapter: (courseId: number | string, chapterId: number, materialAction: 'keep_unassigned' | 'delete') => request<{ message: string }>(`/api/courses/${courseId}/chapters/${chapterId}`, { method: 'DELETE', body: JSON.stringify({ material_action: materialAction }) }),
+  moveDocument: (courseId: number | string, documentId: number, chapterId: number | null) => request<DocumentSummary>(`/api/courses/${courseId}/documents/${documentId}/chapter`, { method: 'PATCH', body: JSON.stringify({ chapter_id: chapterId }) }),
   learningPackageTask: (courseId: number | string, packageId: number) =>
     request<LearningPackage>(`/api/courses/${courseId}/learning-package/${packageId}`),
   queryCourseAssistant: (courseId: number | string, input: AssistantQueryInput) =>

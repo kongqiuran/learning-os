@@ -18,6 +18,7 @@ class Course(Base):
 
     user: Mapped["User"] = relationship(back_populates="courses")
     documents: Mapped[list["Document"]] = relationship(back_populates="course", cascade="all, delete-orphan")
+    chapters: Mapped[list["Chapter"]] = relationship(back_populates="course", cascade="all, delete-orphan", order_by="Chapter.position")
     knowledge_items: Mapped[list["Knowledge"]] = relationship(
         back_populates="course",
         cascade="all, delete-orphan",

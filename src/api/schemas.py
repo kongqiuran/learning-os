@@ -68,6 +68,22 @@ class AiGenerationUsageResponse(BaseModel):
 class UsageSummaryResponse(BaseModel):
     plan: str
     ai_generations: AiGenerationUsageResponse
+    course_entitlements: list["CourseEntitlementResponse"] = Field(default_factory=list)
+
+
+class CourseEntitlementResponse(BaseModel):
+    id: int
+    course_id: int
+    course_name: str
+    product_code: str
+    amount_cents: int
+    status: str
+    activated_at: datetime
+    expires_at: datetime
+    follow_remaining: int
+    textbook_remaining: int
+    exam_remaining: int
+    assistant_remaining: int
 
 
 class MessageResponse(BaseModel):
@@ -114,7 +130,34 @@ class DocumentResponse(BaseModel):
     file_size: int
     status: str
     document_type: str
+    chapter_id: int | None = None
     uploaded_at: datetime
+
+
+class ChapterCreateRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+
+
+class ChapterUpdateRequest(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    position: int | None = Field(default=None, ge=0)
+
+
+class ChapterDeleteRequest(BaseModel):
+    material_action: str
+
+
+class DocumentMoveRequest(BaseModel):
+    chapter_id: int | None = None
+
+
+class ChapterResponse(BaseModel):
+    id: int
+    title: str
+    position: int
+    document_count: int
+    created_at: datetime
+    updated_at: datetime
 
 
 class LearningPackageResponse(BaseModel):
@@ -127,17 +170,24 @@ class LearningPackageResponse(BaseModel):
     error_type: str | None = None
     error_detail: str | None = None
     created_at: datetime
+    scene: str = "legacy"
+    scope_document_id: int | None = None
 
 
 class CourseSpaceResponse(BaseModel):
     course: CourseDetailResponse
     documents: list[DocumentResponse]
     learning_package: LearningPackageResponse | None
+    chapters: list[ChapterResponse] = Field(default_factory=list)
+    scene_packages: dict[str, LearningPackageResponse | None] = Field(default_factory=dict)
 
 
 class AssistantQueryRequest(BaseModel):
     question: str = Field(min_length=1, max_length=1000)
     current_section: str | None = Field(default=None, max_length=200)
+    scene: str | None = Field(default=None, max_length=20)
+    chapter_id: int | None = None
+    textbook_id: int | None = None
 
     @field_validator("question")
     @classmethod

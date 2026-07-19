@@ -38,7 +38,7 @@ class GenerationAdapterTest(unittest.TestCase):
 
         self.assertNotIn(10, generation_adapter._active_course_ids)
 
-    def test_queue_creates_pending_task_and_keeps_lock_until_worker_finishes(self):
+    def test_queue_creates_pending_task_and_releases_process_lock(self):
         task = SimpleNamespace(id=7, status="pending")
         with (
             patch.object(generation_adapter, "get_learning_package", return_value=None),
@@ -48,7 +48,7 @@ class GenerationAdapterTest(unittest.TestCase):
 
         self.assertIs(result, task)
         create_task.assert_called_once_with(10, 5)
-        self.assertIn(10, generation_adapter._active_course_ids)
+        self.assertNotIn(10, generation_adapter._active_course_ids)
 
     def test_queued_worker_reuses_task_and_releases_lock(self):
         generation_adapter._active_course_ids.add(10)

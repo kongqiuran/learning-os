@@ -1,4 +1,7 @@
 import os
+import logging
+import time
+from uuid import uuid4
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -7,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
 from src.api.errors import register_error_handlers
-from src.api.routers import account, auth, billing, course_space, courses, health, knowledge, privacy
+from src.api.routers import account, auth, billing, chapters, course_space, courses, health, knowledge, privacy
 
 
 BASE_DIR = Path(__file__).resolve().parents[2]
@@ -36,6 +39,19 @@ def create_app(session_secret=None):
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Content-Type", "Authorization"],
     )
+
+    @app.middleware("http")
+    async def request_log_middleware(request, call_next):
+        request_id = request.headers.get("X-Request-ID") or uuid4().hex
+        started = time.monotonic()
+        try:
+            response = await call_next(request)
+        except Exception:
+            logging.getLogger("learning_os.api").exception("request_failed request_id=%s method=%s path=%s", request_id, request.method, request.url.path)
+            raise
+        response.headers["X-Request-ID"] = request_id
+        logging.getLogger("learning_os.api").info("request_completed request_id=%s method=%s path=%s status=%s duration_ms=%d", request_id, request.method, request.url.path, response.status_code, int((time.monotonic() - started) * 1000))
+        return response
     app.add_middleware(
         SessionMiddleware,
         secret_key=selected_session_secret,
@@ -52,6 +68,7 @@ def create_app(session_secret=None):
     app.include_router(privacy.router)
     app.include_router(billing.router)
     app.include_router(courses.router)
+    app.include_router(chapters.router)
     app.include_router(course_space.router)
     app.include_router(knowledge.router)
     return app

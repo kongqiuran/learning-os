@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from sqlalchemy import func, select
 
 from src.ai.analyzers.course_analyzer import analyze_course_documents
@@ -14,8 +15,15 @@ class TenantIsolationError(ValueError):
     """Raised when a background task's resource ownership tuple is invalid."""
 
 
-def analyze_course(course_id, user_id, llm_client=None, language="zh", package_id=None):
-    course, documents = _load_course_documents(course_id, user_id)
+SCENE_TYPES = {
+    "follow": {"SLIDES", "HOMEWORK", "OTHER", "NOTES"},
+    "textbook": {"TEXTBOOK"},
+    "exam": {"EXAM", "HOMEWORK"},
+}
+
+
+def analyze_course(course_id, user_id, llm_client=None, language="zh", package_id=None, scene=None, scope_document_id=None):
+    course, documents = _load_course_documents(course_id, user_id, scene, scope_document_id)
     if course is None:
         raise ValueError("The course does not exist or access is denied.")
     if not documents:
@@ -84,6 +92,7 @@ def analyze_course(course_id, user_id, llm_client=None, language="zh", package_i
             stored_package.current_stage = "completed"
             stored_package.error_type = None
             stored_package.error_detail = None
+            stored_package.finished_at = datetime.now(timezone.utc)
         package.status = "completed"
         package.content_json = content
         package.current_stage = "completed"
@@ -115,6 +124,7 @@ def analyze_course(course_id, user_id, llm_client=None, language="zh", package_i
             )
             stored_package.error_type = error_type
             stored_package.error_detail = error_detail
+            stored_package.finished_at = datetime.now(timezone.utc)
             stored_package.content_json = {
                 "error": {
                     "code": "generation_failed",
@@ -136,6 +146,14 @@ def get_learning_package(course_id, user_id):
         )
 
 
+def get_scene_packages(course_id, user_id):
+    result = {}
+    with get_db_session() as session:
+        for scene in SCENE_TYPES:
+            result[scene] = session.scalar(select(LearningPackage).join(Course).where(LearningPackage.course_id == int(course_id), Course.user_id == int(user_id), LearningPackage.scene == scene).order_by(LearningPackage.version.desc(), LearningPackage.id.desc()))
+    return result
+
+
 def get_learning_package_task(package_id, course_id, user_id):
     if package_id is None or course_id is None or user_id is None:
         return None
@@ -151,14 +169,22 @@ def get_learning_package_task(package_id, course_id, user_id):
         )
 
 
-def create_learning_package_task(course_id, user_id):
-    course, documents = _load_course_documents(course_id, user_id)
+def create_learning_package_task(course_id, user_id, scene="legacy", scope_document_id=None):
+    course, documents = _load_course_documents(course_id, user_id, None if scene == "legacy" else scene, scope_document_id)
     if course is None:
         raise ValueError("The course does not exist or access is denied.")
     if not documents:
         raise ValueError("Upload at least one supported document before generating a learning package.")
     _validate_document_course_binding(course_id, documents)
-    return _create_package(course.id, user_id, "pending")
+    package = _create_package(course.id, user_id, "pending")
+    with get_db_session() as session:
+        stored = session.get(LearningPackage, package.id)
+        stored.scene = scene
+        stored.scope_document_id = scope_document_id
+        session.flush()
+        package.scene = scene
+        package.scope_document_id = scope_document_id
+    return package
 
 
 def _validate_document_course_binding(course_id, documents):
@@ -166,15 +192,14 @@ def _validate_document_course_binding(course_id, documents):
         raise ValueError("Document-course mismatch detected.")
 
 
-def _load_course_documents(course_id, user_id):
+def _load_course_documents(course_id, user_id, scene=None, scope_document_id=None):
     if course_id is None or user_id is None:
         return None, []
     with get_db_session() as session:
         course = session.scalar(
             select(Course).where(Course.id == int(course_id), Course.user_id == int(user_id))
         )
-        documents = list(
-            session.scalars(
+        statement = (
                 select(Document)
                 .join(Course, Document.course_id == Course.id)
                 .where(
@@ -183,8 +208,12 @@ def _load_course_documents(course_id, user_id):
                     Course.user_id == int(user_id),
                 )
                 .order_by(Document.id)
-            )
         )
+        if scene in SCENE_TYPES:
+            statement = statement.where(Document.document_type.in_(SCENE_TYPES[scene]))
+        if scope_document_id is not None:
+            statement = statement.where(Document.id == int(scope_document_id))
+        documents = list(session.scalars(statement))
         return course, documents
 
 

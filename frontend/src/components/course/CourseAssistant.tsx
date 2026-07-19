@@ -11,10 +11,14 @@ export function CourseAssistant({
   courseId,
   courseName,
   currentSection,
+  scene,
+  chapterId,
 }: {
   courseId: string | undefined
   courseName: string
   currentSection: string
+  scene?: string
+  chapterId?: number | null
 }) {
   const [question, setQuestion] = useState('')
   const [submittedQuestion, setSubmittedQuestion] = useState('')
@@ -26,7 +30,7 @@ export function CourseAssistant({
     const normalizedQuestion = question.trim()
     if (!normalizedQuestion) return
     setSubmittedQuestion(normalizedQuestion)
-    assistant.mutate({ question: normalizedQuestion, current_section: currentSection || undefined })
+    assistant.mutate({ question: normalizedQuestion, current_section: currentSection || undefined, scene, chapter_id: chapterId ?? undefined })
   }
 
   return (

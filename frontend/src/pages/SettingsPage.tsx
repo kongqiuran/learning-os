@@ -65,6 +65,8 @@ export function SettingsPage() {
         <p className="mt-2 text-sm text-slate-500">查看当前套餐、额度与账号设置。</p>
       </div>
 
+      {usage.data?.course_entitlements.length ? <div className="mt-8"><h2 className="text-xl font-semibold text-stone-950">已开通课程权益</h2><div className="mt-4 grid gap-4 md:grid-cols-2">{usage.data.course_entitlements.map((item) => <Card className="p-5" key={item.id}><div className="flex items-start justify-between gap-3"><div><h3 className="font-semibold text-stone-900">{item.course_name}</h3><p className="mt-1 text-xs text-stone-500">99 元单课学期版 · 至 {new Intl.DateTimeFormat('zh-CN').format(new Date(item.expires_at))}</p></div><span className="rounded-full bg-emerald-50 px-2 py-1 text-xs text-emerald-700">{item.status === 'active' ? '使用中' : item.status}</span></div><div className="mt-4 grid grid-cols-2 gap-2 text-xs text-stone-600"><span>跟课整理 {item.follow_remaining}/3</span><span>教材解析 {item.textbook_remaining}/3</span><span>考试冲刺 {item.exam_remaining}/3</span><span>课程问答 {item.assistant_remaining}/100</span></div></Card>)}</div></div> : null}
+
       <div className="mt-8 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
         <Card className="overflow-hidden">
           <div className="border-b border-slate-100 p-5 sm:p-6">

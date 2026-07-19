@@ -11,6 +11,7 @@ import { LegalPage } from '../pages/LegalPage'
 import { LoginPage } from '../pages/LoginPage'
 import { RegisterPage } from '../pages/RegisterPage'
 import { SettingsPage } from '../pages/SettingsPage'
+import { PricingPage } from '../pages/PricingPage'
 
 export function AppRouter() {
   return (
@@ -25,10 +26,14 @@ export function AppRouter() {
           <Route element={<AppShell />}>
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="/dashboard" element={<DashboardPage />} />
-            <Route path="/courses/:courseId" element={<CourseSpacePage />} />
+            <Route path="/courses/:courseId" element={<Navigate to="follow" replace />} />
+            <Route path="/courses/:courseId/follow" element={<CourseSpacePage scene="follow" />} />
+            <Route path="/courses/:courseId/textbooks" element={<CourseSpacePage scene="textbook" />} />
+            <Route path="/courses/:courseId/exam" element={<CourseSpacePage scene="exam" />} />
             <Route path="/courses/:courseId/knowledge" element={<KnowledgeWorkspacePage />} />
             <Route path="/courses/:courseId/knowledge/:knowledgeId" element={<KnowledgeDetailPage />} />
             <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/pricing" element={<PricingPage />} />
           </Route>
         </Route>
         <Route path="*" element={<Navigate to="/dashboard" replace />} />

@@ -14,18 +14,12 @@ interface SidebarProps {
 
 export function Sidebar({ onNavigate }: SidebarProps) {
   const navigate = useNavigate()
-  const upgradeUrl = import.meta.env.VITE_UPGRADE_URL as string | undefined
-
   function handleUpgrade() {
-    if (upgradeUrl) {
-      window.open(upgradeUrl, '_blank', 'noopener,noreferrer')
-      return
-    }
-    window.alert('升级方案即将开放，感谢关注 Learning OS。')
+    navigate('/pricing')
   }
 
   return (
-    <aside className="flex h-full w-64 flex-col border-r border-slate-200 bg-white px-4 py-5">
+    <aside className="flex h-full w-64 flex-col border-r border-stone-200 bg-[#fffdfa] px-4 py-5">
       <button
         className="flex items-center gap-3 rounded-xl px-2 text-left focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100"
         onClick={() => {
@@ -33,7 +27,7 @@ export function Sidebar({ onNavigate }: SidebarProps) {
           onNavigate?.()
         }}
       >
-        <span className="grid size-9 place-items-center rounded-xl bg-blue-600 text-white">
+        <span className="grid size-9 place-items-center rounded-xl bg-teal-700 text-white">
           <BookOpen className="size-5" />
         </span>
         <span>

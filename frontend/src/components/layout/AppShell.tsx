@@ -12,7 +12,7 @@ export function AppShell() {
   const email = currentUser.data?.user.email ?? ''
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-950">
+    <div className="min-h-screen bg-[#f7f6f2] text-stone-950">
       <div className="fixed inset-y-0 left-0 hidden lg:block">
         <Sidebar />
       </div>

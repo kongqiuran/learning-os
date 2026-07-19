@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from src.config import get_database_url
 from src.database.base import Base
+from src.database.migrations import run_schema_migrations
 
 
 def _ensure_sqlite_directory(database_url):
@@ -44,6 +45,7 @@ def create_database_tables():
     Base.metadata.create_all(bind=engine)
     _upgrade_sqlite_document_columns()
     _upgrade_sqlite_learning_package_columns()
+    run_schema_migrations(engine)
 
 
 def _upgrade_sqlite_document_columns():

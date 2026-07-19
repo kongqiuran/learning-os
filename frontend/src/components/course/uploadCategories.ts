@@ -14,7 +14,7 @@ export const UPLOAD_CATEGORIES: UploadCategory[] = [
     label: '教材',
     action: '上传教材',
     description: '教材、参考书或章节讲义',
-    primary: true,
+    primary: false,
   },
   {
     type: 'SLIDES',
@@ -25,10 +25,10 @@ export const UPLOAD_CATEGORIES: UploadCategory[] = [
   },
   {
     type: 'NOTES',
-    label: '笔记',
-    action: '上传笔记',
-    description: '课堂笔记或复习笔记',
-    primary: true,
+    label: '补充资料',
+    action: '上传补充资料',
+    description: '电子笔记、讲义或其他辅助材料',
+    primary: false,
   },
   {
     type: 'EXAM',
@@ -42,14 +42,14 @@ export const UPLOAD_CATEGORIES: UploadCategory[] = [
     label: '作业',
     action: '上传作业',
     description: '平时作业或习题材料',
-    primary: false,
+    primary: true,
   },
   {
     type: 'OTHER',
-    label: '其他资料',
-    action: '上传其他资料',
-    description: '无法归入以上类别的资料',
-    primary: false,
+    label: '补充资料',
+    action: '上传补充资料',
+    description: '电子资料、补充讲义或参考内容',
+    primary: true,
   },
 ]
 

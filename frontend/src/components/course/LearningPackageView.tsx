@@ -25,12 +25,14 @@ export function LearningPackageView({
   canGenerate,
   onGenerate,
   onSelectSection,
+  allowedSections,
 }: {
   learningPackage: LearningPackage | null
   generating: boolean
   canGenerate: boolean
   onGenerate: () => void
   onSelectSection: (section: string) => void
+  allowedSections?: string[]
 }) {
   const isLoading = generating || learningPackage?.status === 'pending' || learningPackage?.status === 'processing'
 
@@ -45,7 +47,7 @@ export function LearningPackageView({
 
   const completedPackage = learningPackage?.status === 'completed' ? learningPackage : null
   const sections = completedPackage
-    ? sectionOrder
+    ? sectionOrder.filter((key) => !allowedSections || allowedSections.includes(key))
         .filter((key) => hasContent(completedPackage.content[key]))
         .map((key) => [key, completedPackage.content[key]] as const)
     : []

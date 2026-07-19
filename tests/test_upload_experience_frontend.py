@@ -15,7 +15,7 @@ class UploadExperienceFrontendContractTest(unittest.TestCase):
         expected = {
             "TEXTBOOK": "上传教材",
             "SLIDES": "上传课件",
-            "NOTES": "上传笔记",
+            "OTHER": "上传补充资料",
             "EXAM": "上传试卷",
         }
         for document_type, action in expected.items():

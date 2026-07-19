@@ -28,7 +28,13 @@ def generate_course_package(course_id, user_id):
         _release_course(course_id)
 
 
-def queue_course_package(course_id, user_id):
+def queue_course_package(course_id, user_id, scene="legacy", scope_document_id=None):
+    """Persist a task while holding only a request-local duplicate guard.
+
+    The worker runs in a separate process, so retaining this in-memory lock after
+    the task is created would permanently block later generations in the API
+    process. Persisted pending/processing packages are the cross-process guard.
+    """
     if not _claim_course(course_id):
         raise GenerationInProgressError("Course content generation is already in progress.")
 
@@ -36,20 +42,18 @@ def queue_course_package(course_id, user_id):
         latest_package = get_learning_package(course_id, user_id)
         if _is_recent_processing_package(latest_package):
             raise GenerationInProgressError("Course content generation is already in progress.")
-        return create_learning_package_task(course_id, user_id)
-    except Exception:
+        if scene == "legacy" and scope_document_id is None:
+            return create_learning_package_task(course_id, user_id)
+        return create_learning_package_task(course_id, user_id, scene, scope_document_id)
+    finally:
         _release_course(course_id)
-        raise
 
 
-def run_queued_course_package(package_id, course_id, user_id):
+def run_queued_course_package(package_id, course_id, user_id, scene=None, scope_document_id=None):
     try:
-        return analyze_course(
-            course_id,
-            user_id,
-            language="zh",
-            package_id=package_id,
-        )
+        if scene is None and scope_document_id is None:
+            return analyze_course(course_id, user_id, language="zh", package_id=package_id)
+        return analyze_course(course_id, user_id, language="zh", package_id=package_id, scene=scene, scope_document_id=scope_document_id)
     finally:
         _release_course(course_id)
 

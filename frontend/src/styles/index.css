@@ -2,16 +2,16 @@
 
 @theme {
   --font-sans: Inter, "PingFang SC", "Microsoft YaHei", "Noto Sans SC", ui-sans-serif, system-ui, sans-serif;
-  --color-brand: #2563eb;
-  --color-ai: #7c3aed;
+  --color-brand: #0f766e;
+  --color-ai: #0f766e;
   --color-success: #16a34a;
   --color-emphasis: #ea580c;
 }
 
 :root {
   font-family: Inter, "PingFang SC", "Microsoft YaHei", "Noto Sans SC", ui-sans-serif, system-ui, sans-serif;
-  color: #0f172a;
-  background: #f8fafc;
+  color: #1c1917;
+  background: #f7f6f2;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
@@ -22,7 +22,7 @@
 
 html {
   min-width: 320px;
-  background: #f8fafc;
+  background: #f7f6f2;
 }
 
 body {

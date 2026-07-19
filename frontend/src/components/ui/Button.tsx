@@ -9,11 +9,11 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const variantStyles: Record<ButtonVariant, string> = {
-  primary: 'border-blue-600 bg-blue-600 text-white hover:bg-blue-700 focus-visible:ring-blue-200',
+  primary: 'border-teal-700 bg-teal-700 text-white hover:bg-teal-800 focus-visible:ring-teal-100',
   secondary:
-    'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50 focus-visible:ring-slate-200',
-  ghost: 'border-transparent bg-transparent text-slate-600 hover:bg-slate-100 focus-visible:ring-slate-200',
-  ai: 'border-violet-600 bg-violet-600 text-white hover:bg-violet-700 focus-visible:ring-violet-200',
+    'border-stone-200 bg-white text-stone-700 hover:border-stone-300 hover:bg-stone-50 focus-visible:ring-stone-200',
+  ghost: 'border-transparent bg-transparent text-stone-600 hover:bg-stone-100 focus-visible:ring-stone-200',
+  ai: 'border-teal-700 bg-teal-700 text-white hover:bg-teal-800 focus-visible:ring-teal-100',
   danger: 'border-red-600 bg-red-600 text-white hover:bg-red-700 focus-visible:ring-red-200',
 }
 

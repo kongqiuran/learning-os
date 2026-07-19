@@ -1,4 +1,5 @@
 import logging
+import os
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile, status
 
@@ -23,7 +24,8 @@ from src.api.serializers import (
     serialize_document,
     serialize_learning_package,
 )
-from src.services.analysis_service import get_learning_package, get_learning_package_task
+from src.services.analysis_service import get_learning_package, get_learning_package_task, get_scene_packages
+from src.services.chapter_service import list_chapters
 from src.services.course_service import get_course_for_user
 from src.services.document_service import (
     DocumentUploadError,
@@ -36,6 +38,7 @@ from src.services.quota_service import (
     release_ai_generation,
     reserve_ai_generation,
 )
+from src.services.entitlement_service import EntitlementQuotaExceeded, consume_assistant, get_active_entitlement, require_scene_allowance
 
 
 router = APIRouter(prefix="/api/courses/{course_id}", tags=["course-space"])
@@ -47,7 +50,7 @@ def get_course_space(course_id: int, user=Depends(require_current_user)):
     course = _require_course(course_id, user.id)
     documents = list_documents_for_course(user.id, course_id)
     package = get_learning_package(course_id, user.id)
-    return serialize_course_space(course, documents, package)
+    return serialize_course_space(course, documents, package, list_chapters(course_id, user.id), get_scene_packages(course_id, user.id))
 
 
 @router.post(
@@ -59,6 +62,7 @@ async def upload_document(
     course_id: int,
     file: UploadFile = File(...),
     document_type: str = Form("OTHER"),
+    chapter_id: int | None = Form(None),
     user=Depends(require_current_user),
 ):
     _require_course(course_id, user.id)
@@ -66,6 +70,9 @@ async def upload_document(
     service_file = ServiceUploadFile(file.filename or "", file.content_type, data)
     try:
         document = save_uploaded_document(user.id, course_id, service_file, document_type)
+        if chapter_id is not None:
+            from src.services.chapter_service import move_document
+            document = move_document(document.id, course_id, user.id, chapter_id)
     except DocumentUploadError as exc:
         raise HTTPException(
             status_code=400,
@@ -129,12 +136,48 @@ def generate_learning_package(
     except Exception:
         release_ai_generation(usage_reservation)
         raise
-    background_tasks.add_task(
-        _run_generation_background_task,
-        package.id,
-        course_id,
-        user.id,
-    )
+    package.usage_record_id = usage_reservation.id
+    from src.database import get_db_session
+    from src.models import LearningPackage
+    with get_db_session() as session:
+        stored_package = session.get(LearningPackage, package.id)
+        if stored_package is not None:
+            stored_package.usage_record_id = usage_reservation.id
+    if os.getenv("LEARNING_OS_TESTING", "").lower() in {"1", "true"}:
+        background_tasks.add_task(_run_generation_background_task, package.id, course_id, user.id)
+    return serialize_learning_package(package)
+
+
+@router.post("/generations/{scene}", response_model=LearningPackageResponse, status_code=status.HTTP_202_ACCEPTED)
+def generate_scene(scene: str, background_tasks: BackgroundTasks, course_id: int, scope_document_id: int | None = None, user=Depends(require_current_user)):
+    if scene not in {"follow", "textbook", "exam"}:
+        raise HTTPException(400, detail={"code": "invalid_scene", "message": "Invalid learning scene."})
+    _require_course(course_id, user.id)
+    entitlement = get_active_entitlement(user.id, course_id)
+    reservation = None
+    if entitlement is not None:
+        try:
+            require_scene_allowance(entitlement, scene)
+        except EntitlementQuotaExceeded as exc:
+            raise HTTPException(429, detail={"code": "course_quota_exceeded", "message": str(exc)}) from exc
+    else:
+        reservation = reserve_ai_generation(user.id)
+    try:
+        package = queue_course_package(course_id, user.id, scene, scope_document_id)
+        package.usage_record_id = reservation.id if reservation else None
+        package.entitlement_id = entitlement.id if entitlement else None
+        from src.database import get_db_session
+        from src.models import LearningPackage
+        with get_db_session() as session:
+            stored = session.get(LearningPackage, package.id)
+            stored.usage_record_id = reservation.id if reservation else None
+            stored.entitlement_id = entitlement.id if entitlement else None
+    except Exception:
+        if reservation:
+            release_ai_generation(reservation)
+        raise
+    if os.getenv("LEARNING_OS_TESTING", "").lower() in {"1", "true"}:
+        background_tasks.add_task(_run_generation_background_task, package.id, course_id, user.id, scene, scope_document_id)
     return serialize_learning_package(package)
 
 
@@ -165,12 +208,13 @@ def query_course_assistant(
 ):
     _require_course(course_id, user.id)
     try:
-        result = answer_course_question(
-            course_id,
-            user.id,
-            payload.question,
-            payload.current_section,
-        )
+        if payload.scene or payload.chapter_id or payload.textbook_id:
+            result = answer_course_question(course_id, user.id, payload.question, payload.current_section, scene=payload.scene, chapter_id=payload.chapter_id, textbook_id=payload.textbook_id)
+        else:
+            result = answer_course_question(course_id, user.id, payload.question, payload.current_section)
+        consume_assistant(user.id, course_id)
+    except EntitlementQuotaExceeded as exc:
+        raise HTTPException(429, detail={"code": "assistant_quota_exceeded", "message": str(exc)}) from exc
     except Exception as exc:
         logger.exception("Course assistant query failed.")
         raise HTTPException(
@@ -190,9 +234,12 @@ def _require_course(course_id, user_id):
     return course
 
 
-def _run_generation_background_task(package_id, course_id, user_id):
+def _run_generation_background_task(package_id, course_id, user_id, scene=None, scope_document_id=None):
     try:
-        run_queued_course_package(package_id, course_id, user_id)
+        if scene is None and scope_document_id is None:
+            run_queued_course_package(package_id, course_id, user_id)
+        else:
+            run_queued_course_package(package_id, course_id, user_id, scene, scope_document_id)
     except Exception:
         logger.exception(
             "Course content generation task failed.",

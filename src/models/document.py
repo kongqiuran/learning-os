@@ -23,6 +23,7 @@ class Document(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
     course_id: Mapped[int] = mapped_column(ForeignKey("courses.id", ondelete="CASCADE"), index=True, nullable=False)
+    chapter_id: Mapped[int | None] = mapped_column(ForeignKey("chapters.id", ondelete="SET NULL"), index=True, nullable=True)
     original_filename: Mapped[str] = mapped_column("filename", String(255), nullable=False)
     stored_filename: Mapped[str] = mapped_column(String(255), nullable=False, default="")
     file_path: Mapped[str] = mapped_column(String(1000), nullable=False)
@@ -52,6 +53,7 @@ class Document(Base):
 
     user: Mapped["User"] = relationship(back_populates="documents")
     course: Mapped["Course"] = relationship(back_populates="documents")
+    chapter: Mapped["Chapter | None"] = relationship(back_populates="documents")
     analysis: Mapped["DocumentAnalysis | None"] = relationship(
         back_populates="document",
         cascade="all, delete-orphan",

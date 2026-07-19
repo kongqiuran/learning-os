@@ -19,7 +19,9 @@ RUN python -m pip install --upgrade pip \
     && python -m pip install -r requirements.txt
 
 COPY api_server.py ./
+COPY worker.py ./
 COPY src ./src
+COPY scripts ./scripts
 
 RUN mkdir -p /data/database /data/uploads \
     && chown -R learningos:learningos /app /data
