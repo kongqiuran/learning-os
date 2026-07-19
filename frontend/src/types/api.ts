@@ -12,6 +12,16 @@ export interface ApiErrorPayload {
   error: {
     code: string
     message: string
+    quota_source?: 'free_monthly' | 'course_entitlement'
+    metric?: string
+    scene?: string | null
+    course_id?: number
+    remaining?: number
+    limit?: number
+    used?: number
+    resets_at?: string | null
+    can_purchase?: boolean
+    purchase_url?: string
   }
 }
 

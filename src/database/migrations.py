@@ -32,6 +32,15 @@ MIGRATIONS = (
             "prompt_version": "VARCHAR(40)",
         },
     }),
+    ("20260719_quota_settlement", {
+        "learning_packages": {
+            "quota_source": "VARCHAR(30)",
+            "quota_state": "VARCHAR(20)",
+            "quota_units": "INTEGER NOT NULL DEFAULT 1",
+            "quota_reserved_at": "DATETIME",
+            "quota_settled_at": "DATETIME",
+        },
+    }),
 )
 
 

@@ -36,10 +36,17 @@ from src.services.document_service import (
 from src.services.quota_service import (
     UsageQuotaExceededError,
     release_ai_generation,
-    release_ai_generation_by_record_id,
     reserve_ai_generation,
 )
-from src.services.entitlement_service import EntitlementQuotaExceeded, consume_assistant, get_active_entitlement, require_scene_allowance
+from src.services.entitlement_service import (
+    EntitlementQuotaExceeded,
+    get_active_entitlement,
+    release_assistant,
+    release_scene,
+    reserve_assistant,
+    reserve_scene,
+)
+from src.services.quota_settlement_service import release_package_quota, settle_package_quota
 
 
 router = APIRouter(prefix="/api/courses/{course_id}", tags=["course-space"])
@@ -114,20 +121,9 @@ def generate_learning_package(
     try:
         usage_reservation = reserve_ai_generation(user.id)
     except UsageQuotaExceededError as exc:
-        raise HTTPException(
-            status_code=429,
-            detail={
-                "code": "quota_exceeded",
-                "metric": "ai_generation",
-                "limit": exc.limit,
-                "used": exc.used,
-                "remaining": 0,
-                "resets_at": exc.resets_at.isoformat(),
-                "message": str(exc),
-            },
-        ) from exc
+        raise _free_quota_http_error(exc, course_id) from exc
     try:
-        package = queue_course_package(course_id, user.id)
+        package = queue_course_package(course_id, user.id, usage_record_id=usage_reservation.id, quota_source="free_monthly")
     except GenerationInProgressError as exc:
         release_ai_generation(usage_reservation)
         raise HTTPException(
@@ -143,13 +139,6 @@ def generate_learning_package(
     except Exception:
         release_ai_generation(usage_reservation)
         raise
-    package.usage_record_id = usage_reservation.id
-    from src.database import get_db_session
-    from src.models import LearningPackage
-    with get_db_session() as session:
-        stored_package = session.get(LearningPackage, package.id)
-        if stored_package is not None:
-            stored_package.usage_record_id = usage_reservation.id
     if os.getenv("LEARNING_OS_TESTING", "").lower() in {"1", "true"}:
         background_tasks.add_task(_run_generation_background_task, package.id, course_id, user.id)
     return serialize_learning_package(package)
@@ -162,34 +151,38 @@ def generate_scene(scene: str, background_tasks: BackgroundTasks, course_id: int
     _require_course(course_id, user.id)
     entitlement = get_active_entitlement(user.id, course_id)
     reservation = None
+    paid_reserved = False
     if entitlement is not None:
         try:
-            require_scene_allowance(entitlement, scene)
+            reserve_scene(entitlement.id, scene)
+            paid_reserved = True
         except EntitlementQuotaExceeded as exc:
-            raise HTTPException(429, detail={"code": "course_quota_exceeded", "message": str(exc)}) from exc
+            raise _paid_quota_http_error(course_id, scene, str(exc)) from exc
     else:
-        reservation = reserve_ai_generation(user.id)
+        try:
+            reservation = reserve_ai_generation(user.id)
+        except UsageQuotaExceededError as exc:
+            raise _free_quota_http_error(exc, course_id, scene) from exc
     try:
-        package = queue_course_package(course_id, user.id, scene, scope_document_id, scope_chapter_id, scope_unassigned)
-        package.usage_record_id = reservation.id if reservation else None
-        package.entitlement_id = entitlement.id if entitlement else None
-        from src.database import get_db_session
-        from src.models import LearningPackage
-        with get_db_session() as session:
-            stored = session.get(LearningPackage, package.id)
-            stored.usage_record_id = reservation.id if reservation else None
-            stored.entitlement_id = entitlement.id if entitlement else None
+        package = queue_course_package(
+            course_id,
+            user.id,
+            scene,
+            scope_document_id,
+            scope_chapter_id,
+            scope_unassigned,
+            reservation.id if reservation else None,
+            entitlement.id if entitlement else None,
+            "course_entitlement" if entitlement else "free_monthly",
+        )
     except GenerationInProgressError as exc:
-        if reservation:
-            release_ai_generation(reservation)
+        _release_unattached_quota(reservation, entitlement.id if paid_reserved and entitlement else None, scene)
         raise HTTPException(409, detail={"code": "generation_in_progress", "message": str(exc)}) from exc
     except ValueError as exc:
-        if reservation:
-            release_ai_generation(reservation)
+        _release_unattached_quota(reservation, entitlement.id if paid_reserved and entitlement else None, scene)
         raise HTTPException(400, detail={"code": "invalid_generation_scope", "message": str(exc)}) from exc
     except Exception:
-        if reservation:
-            release_ai_generation(reservation)
+        _release_unattached_quota(reservation, entitlement.id if paid_reserved and entitlement else None, scene)
         raise
     if os.getenv("LEARNING_OS_TESTING", "").lower() in {"1", "true"}:
         background_tasks.add_task(_run_generation_background_task, package.id, course_id, user.id, scene, scope_document_id, scope_chapter_id, scope_unassigned)
@@ -222,15 +215,18 @@ def query_course_assistant(
     user=Depends(require_current_user),
 ):
     _require_course(course_id, user.id)
+    assistant_entitlement_id = None
     try:
+        assistant_entitlement_id = reserve_assistant(user.id, course_id)
         if payload.scene or payload.chapter_id or payload.textbook_id or payload.scope_unassigned:
             result = answer_course_question(course_id, user.id, payload.question, payload.current_section, scene=payload.scene, chapter_id=payload.chapter_id, textbook_id=payload.textbook_id, scope_unassigned=payload.scope_unassigned)
         else:
             result = answer_course_question(course_id, user.id, payload.question, payload.current_section)
-        consume_assistant(user.id, course_id)
     except EntitlementQuotaExceeded as exc:
-        raise HTTPException(429, detail={"code": "assistant_quota_exceeded", "message": str(exc)}) from exc
+        raise _paid_quota_http_error(course_id, "assistant", str(exc)) from exc
     except Exception as exc:
+        if assistant_entitlement_id is not None:
+            release_assistant(assistant_entitlement_id)
         logger.exception("Course assistant query failed.")
         raise HTTPException(
             status_code=502,
@@ -255,15 +251,58 @@ def _run_generation_background_task(package_id, course_id, user_id, scene=None, 
             run_queued_course_package(package_id, course_id, user_id)
         else:
             run_queued_course_package(package_id, course_id, user_id, scene, scope_document_id, scope_chapter_id, scope_unassigned)
+        from src.database import get_db_session
+        with get_db_session() as session:
+            settle_package_quota(session, package_id)
     except Exception:
         from src.database import get_db_session
-        from src.models import LearningPackage
-
         with get_db_session() as session:
-            package = session.get(LearningPackage, package_id)
-            usage_record_id = package.usage_record_id if package is not None else None
-        release_ai_generation_by_record_id(user_id, usage_record_id)
+            release_package_quota(session, package_id)
         logger.exception(
             "Course content generation task failed.",
             extra={"package_id": package_id, "course_id": course_id},
         )
+
+
+def _free_quota_http_error(exc, course_id, scene=None):
+    return HTTPException(
+        status_code=429,
+        detail={
+            "code": "insufficient_credits",
+            "message": "The monthly AI generation quota has been reached.",
+            "quota_source": "free_monthly",
+            "metric": "ai_generation",
+            "scene": scene,
+            "course_id": int(course_id),
+            "limit": exc.limit,
+            "used": exc.used,
+            "remaining": 0,
+            "resets_at": exc.resets_at.isoformat(),
+            "can_purchase": True,
+            "purchase_url": f"/pricing?course_id={int(course_id)}" + (f"&scene={scene}" if scene else ""),
+        },
+    )
+
+
+def _paid_quota_http_error(course_id, scene, message):
+    return HTTPException(
+        status_code=429,
+        detail={
+            "code": "insufficient_credits",
+            "message": message,
+            "quota_source": "course_entitlement",
+            "metric": f"{scene}_generation" if scene != "assistant" else "assistant_query",
+            "scene": scene,
+            "course_id": int(course_id),
+            "remaining": 0,
+            "can_purchase": True,
+            "purchase_url": f"/pricing?course_id={int(course_id)}&scene={scene}",
+        },
+    )
+
+
+def _release_unattached_quota(reservation, entitlement_id, scene):
+    if reservation is not None:
+        release_ai_generation(reservation)
+    if entitlement_id is not None:
+        release_scene(entitlement_id, scene)

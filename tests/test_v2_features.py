@@ -1,11 +1,13 @@
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 
 from src.database import create_database_tables, get_db_session
-from src.models import CourseEntitlement, Document, User
+from src.models import CourseEntitlement, Document, LearningPackage, User
 from src.services.chapter_service import create_chapter, delete_chapter, move_document
 from src.services.course_service import create_course
-from src.services.entitlement_service import consume_assistant, consume_scene, get_active_entitlement
+from src.services.entitlement_service import EntitlementQuotaExceeded, consume_assistant, consume_scene, get_active_entitlement, reserve_scene
+from src.services.quota_settlement_service import release_package_quota
 from src.services.user_service import register_user
 
 
@@ -43,6 +45,52 @@ class V2FeatureTest(unittest.TestCase):
             stored = session.get(CourseEntitlement, entitlement_id)
             self.assertEqual(stored.follow_remaining, 2)
             self.assertEqual(stored.assistant_remaining, 99)
+
+    def test_scene_reservation_is_atomic_when_one_allowance_remains(self):
+        with get_db_session() as session:
+            item = CourseEntitlement(user_id=self.user.id, course_id=self.course.id, payment_reference="atomic-test", expires_at=datetime.now(timezone.utc) + timedelta(days=90), follow_remaining=1)
+            session.add(item); session.flush(); entitlement_id = item.id
+
+        def attempt_reservation(_index):
+            try:
+                reserve_scene(entitlement_id, "follow")
+                return True
+            except EntitlementQuotaExceeded:
+                return False
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            results = list(executor.map(attempt_reservation, range(2)))
+
+        self.assertEqual(results.count(True), 1)
+        self.assertEqual(results.count(False), 1)
+        with get_db_session() as session:
+            self.assertEqual(session.get(CourseEntitlement, entitlement_id).follow_remaining, 0)
+
+    def test_package_quota_refund_is_idempotent(self):
+        with get_db_session() as session:
+            item = CourseEntitlement(user_id=self.user.id, course_id=self.course.id, payment_reference="refund-test", expires_at=datetime.now(timezone.utc) + timedelta(days=90), follow_remaining=1)
+            session.add(item); session.flush(); entitlement_id = item.id
+        reserve_scene(entitlement_id, "follow")
+        with get_db_session() as session:
+            package = LearningPackage(course_id=self.course.id, status="failed", scene="follow", content_json={}, entitlement_id=entitlement_id, quota_source="course_entitlement", quota_state="reserved")
+            session.add(package); session.flush(); package_id = package.id
+        with get_db_session() as session:
+            self.assertTrue(release_package_quota(session, package_id))
+        with get_db_session() as session:
+            self.assertFalse(release_package_quota(session, package_id))
+            self.assertEqual(session.get(CourseEntitlement, entitlement_id).follow_remaining, 1)
+
+    def test_worker_claim_is_atomic(self):
+        import worker
+
+        with get_db_session() as session:
+            package = LearningPackage(course_id=self.course.id, status="pending", scene="legacy", content_json={})
+            session.add(package); session.flush(); package_id = package.id
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            results = list(executor.map(lambda _index: worker._claim_next(), range(2)))
+        claimed = [item for item in results if item is not None]
+        self.assertEqual(len(claimed), 1)
+        self.assertEqual(claimed[0][0], package_id)
 
 
 if __name__ == "__main__":

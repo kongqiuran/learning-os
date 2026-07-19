@@ -236,7 +236,7 @@ def get_learning_package_task(package_id, course_id, user_id):
         )
 
 
-def create_learning_package_task(course_id, user_id, scene="legacy", scope_document_id=None, scope_chapter_id=None, scope_unassigned=False):
+def create_learning_package_task(course_id, user_id, scene="legacy", scope_document_id=None, scope_chapter_id=None, scope_unassigned=False, usage_record_id=None, entitlement_id=None, quota_source=None):
     if scene != "legacy":
         validate_generation_scope(scene, scope_document_id, scope_chapter_id, scope_unassigned)
     course, documents = _load_course_documents(course_id, user_id, None if scene == "legacy" else scene, scope_document_id, scope_chapter_id, scope_unassigned)
@@ -245,7 +245,7 @@ def create_learning_package_task(course_id, user_id, scene="legacy", scope_docum
     if not documents:
         raise ValueError("Upload at least one supported document before generating a learning package.")
     _validate_document_course_binding(course_id, documents)
-    package = _create_package(course.id, user_id, "pending", scene, scope_document_id, scope_chapter_id, scope_unassigned, documents)
+    package = _create_package(course.id, user_id, "pending", scene, scope_document_id, scope_chapter_id, scope_unassigned, documents, usage_record_id, entitlement_id, quota_source)
     with get_db_session() as session:
         stored = session.get(LearningPackage, package.id)
         stored.scene = scene
@@ -310,7 +310,7 @@ def _load_course_documents(course_id, user_id, scene=None, scope_document_id=Non
         return course, documents
 
 
-def _create_package(course_id, user_id, status, scene="legacy", scope_document_id=None, scope_chapter_id=None, scope_unassigned=False, documents=None):
+def _create_package(course_id, user_id, status, scene="legacy", scope_document_id=None, scope_chapter_id=None, scope_unassigned=False, documents=None, usage_record_id=None, entitlement_id=None, quota_source=None):
     scope_kind, scope_key = get_scope_metadata(scope_document_id, scope_chapter_id, scope_unassigned)
     with get_db_session() as session:
         _require_scoped_course(session, course_id, user_id)
@@ -336,6 +336,11 @@ def _create_package(course_id, user_id, status, scene="legacy", scope_document_i
             scope_key=scope_key,
             source_fingerprint=_source_fingerprint(documents or []),
             prompt_version=PROMPT_VERSION if scene == "follow" and scope_kind in {"chapter", "unassigned"} else None,
+            usage_record_id=usage_record_id,
+            entitlement_id=entitlement_id,
+            quota_source=quota_source,
+            quota_state="reserved" if quota_source else None,
+            quota_reserved_at=datetime.now(timezone.utc) if quota_source else None,
         )
         session.add(package)
         session.flush()

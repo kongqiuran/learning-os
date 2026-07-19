@@ -28,7 +28,7 @@ def generate_course_package(course_id, user_id):
         _release_course(course_id)
 
 
-def queue_course_package(course_id, user_id, scene="legacy", scope_document_id=None, scope_chapter_id=None, scope_unassigned=False):
+def queue_course_package(course_id, user_id, scene="legacy", scope_document_id=None, scope_chapter_id=None, scope_unassigned=False, usage_record_id=None, entitlement_id=None, quota_source=None):
     """Persist a task while holding only a request-local duplicate guard.
 
     The worker runs in a separate process, so retaining this in-memory lock after
@@ -45,8 +45,13 @@ def queue_course_package(course_id, user_id, scene="legacy", scope_document_id=N
         if _is_recent_processing_package(latest_package):
             raise GenerationInProgressError("This content is already being generated.")
         if scene == "legacy" and scope_document_id is None and scope_chapter_id is None and not scope_unassigned:
-            return create_learning_package_task(course_id, user_id)
-        return create_learning_package_task(course_id, user_id, scene, scope_document_id, scope_chapter_id, scope_unassigned)
+            quota_options = {}
+            if usage_record_id is not None:
+                quota_options["usage_record_id"] = usage_record_id
+            if quota_source is not None:
+                quota_options["quota_source"] = quota_source
+            return create_learning_package_task(course_id, user_id, **quota_options)
+        return create_learning_package_task(course_id, user_id, scene, scope_document_id, scope_chapter_id, scope_unassigned, usage_record_id, entitlement_id, quota_source)
     finally:
         _release_scope(registry_key)
 

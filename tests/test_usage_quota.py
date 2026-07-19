@@ -66,9 +66,10 @@ class UsageQuotaTest(unittest.TestCase):
                 response = self.client.post("/api/courses/10/learning-package/generate")
 
         self.assertEqual(response.status_code, 429)
-        self.assertEqual(response.json()["error"]["code"], "quota_exceeded")
+        self.assertEqual(response.json()["error"]["code"], "insufficient_credits")
         self.assertEqual(response.json()["error"]["metric"], "ai_generation")
         self.assertEqual(response.json()["error"]["remaining"], 0)
+        self.assertEqual(response.json()["error"]["purchase_url"], "/pricing?course_id=10")
         queue.assert_not_called()
 
     def test_different_users_have_isolated_quotas(self):

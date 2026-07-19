@@ -111,13 +111,16 @@ export function useGenerationTask(courseId: string | undefined, packageId: numbe
       return { ...current, learning_package: task }
     })
     void queryClient.invalidateQueries({ queryKey: courseSpaceQueryKey(courseId) })
+    void queryClient.invalidateQueries({ queryKey: ['billing', 'usage'] })
   }, [courseId, generationTask.data, queryClient])
 
   return generationTask
 }
 
 export function useCourseAssistant(courseId: string | undefined) {
+  const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (input: AssistantQueryInput) => api.queryCourseAssistant(courseId!, input),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['billing', 'usage'] }),
   })
 }

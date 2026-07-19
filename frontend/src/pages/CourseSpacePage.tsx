@@ -288,10 +288,25 @@ function scopeMatchesSelection(scope: GenerationScope, scene: Scene, chapterId: 
 }
 
 function LearningSection({ title, packageData, previousPackage, generating, canGenerate, onGenerate, onSelectSection, sections, showInitialGenerate = true, emptyDescription, error }: { title?: string; packageData: LearningPackage | null; previousPackage?: LearningPackage | null; generating: boolean; canGenerate: boolean; onGenerate: () => void; onSelectSection: (section: string) => void; sections: readonly string[]; showInitialGenerate?: boolean; emptyDescription: string; error: Error | null }) {
+  const navigate = useNavigate()
+  const creditError = error instanceof ApiError && ['insufficient_credits', 'quota_exceeded', 'course_quota_exceeded', 'assistant_quota_exceeded'].includes(error.code) ? error : null
   return (
     <section>
       <div className="mb-3"><h2 className="text-xl font-semibold text-stone-950">{title ? `${title} · AI 整理结果` : 'AI 整理结果'}</h2><p className="mt-1 text-sm text-stone-500">{title ? '只使用当前章节中的资料，结果不会与其他章节混合。' : '仅根据当前场景中的资料生成。'}</p></div>
-      {error ? <p className="mb-3 rounded-xl bg-orange-50 px-3 py-2.5 text-sm text-orange-700">{error instanceof ApiError ? error.message : '暂时无法开始整理，请稍后重试。'}</p> : null}
+      {creditError ? (
+        <Card className="mb-4 border-amber-200 bg-amber-50/70 p-5">
+          <h3 className="font-semibold text-amber-950">您的 AI 整理额度不足</h3>
+          <p className="mt-2 text-sm leading-6 text-amber-800">
+            {creditError.details.quota_source === 'free_monthly' ? '本月免费 AI 整理次数已经用完。' : '当前课程对应功能的使用次数已经用完。'}
+          </p>
+          <p className="mt-2 text-sm text-amber-700">剩余次数：{creditError.details.remaining ?? 0}</p>
+          {creditError.details.resets_at ? <p className="mt-1 text-xs text-amber-700">免费额度将在 {new Intl.DateTimeFormat('zh-CN', { month: 'long', day: 'numeric' }).format(new Date(creditError.details.resets_at))} 重置。</p> : null}
+          <div className="mt-4 flex flex-wrap gap-3">
+            <Button onClick={() => navigate(creditError.details.purchase_url ?? '/pricing')}>查看套餐</Button>
+            <Button variant="secondary" onClick={() => navigate(creditError.details.purchase_url ?? '/pricing')}>联系人工开通</Button>
+          </div>
+        </Card>
+      ) : error ? <p className="mb-3 rounded-xl bg-orange-50 px-3 py-2.5 text-sm text-orange-700">{error instanceof ApiError ? error.message : '暂时无法开始整理，请稍后重试。'}</p> : null}
       <LearningPackageView learningPackage={packageData} previousPackage={previousPackage} generating={generating} canGenerate={canGenerate} onGenerate={onGenerate} onSelectSection={onSelectSection} allowedSections={[...sections]} showInitialGenerate={showInitialGenerate} emptyDescription={emptyDescription} />
     </section>
   )

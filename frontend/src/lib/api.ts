@@ -26,6 +26,7 @@ export class ApiError extends Error {
     public status: number,
     public code: string,
     message: string,
+    public details: ApiErrorPayload['error'] = { code, message },
   ) {
     super(message)
     this.name = 'ApiError'
@@ -53,6 +54,9 @@ const localizedMessages: Record<string, string> = {
   knowledge_not_found: '知识内容不存在或你没有访问权限。',
   confirmation_required: '请输入完整确认文字后再注销账号。',
   quota_exceeded: '本月 AI 整理次数已用完。',
+  course_quota_exceeded: '本课程的 AI 整理次数已用完。',
+  assistant_quota_exceeded: '本课程的 AI 助手次数已用完。',
+  insufficient_credits: '当前 AI 使用额度不足。',
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -65,10 +69,12 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
   if (!response.ok) {
     const payload = (await response.json().catch(() => null)) as ApiErrorPayload | null
+    const errorDetails = payload?.error ?? { code: 'request_failed', message: '请求失败，请稍后重试。' }
     throw new ApiError(
       response.status,
-      payload?.error.code ?? 'request_failed',
-      localizedMessages[payload?.error.code ?? ''] ?? payload?.error.message ?? '请求失败，请稍后重试。',
+      errorDetails.code,
+      localizedMessages[errorDetails.code] ?? errorDetails.message,
+      errorDetails,
     )
   }
 
@@ -100,10 +106,12 @@ function uploadRequest<T>(path: string, body: FormData, onProgress?: (progress: 
         return
       }
       const errorPayload = payload as ApiErrorPayload | null
+      const errorDetails = errorPayload?.error ?? { code: 'request_failed', message: '请求失败，请稍后重试。' }
       reject(new ApiError(
         xhr.status,
-        errorPayload?.error.code ?? 'request_failed',
-        localizedMessages[errorPayload?.error.code ?? ''] ?? errorPayload?.error.message ?? '请求失败，请稍后重试。',
+        errorDetails.code,
+        localizedMessages[errorDetails.code] ?? errorDetails.message,
+        errorDetails,
       ))
     })
     xhr.addEventListener('error', () => reject(new ApiError(0, 'network_error', '网络连接失败，请稍后重试。')))

@@ -1,5 +1,6 @@
 import { BookMarked, FileText, LoaderCircle, Send, Sparkles } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 import { useCourseAssistant } from '../../hooks/useCourseSpace'
 import { ApiError } from '../../lib/api'
@@ -29,6 +30,8 @@ export function CourseAssistant({
   const [question, setQuestion] = useState('')
   const [submittedQuestion, setSubmittedQuestion] = useState('')
   const assistant = useCourseAssistant(courseId)
+  const navigate = useNavigate()
+  const creditError = assistant.error instanceof ApiError && ['insufficient_credits', 'assistant_quota_exceeded'].includes(assistant.error.code) ? assistant.error : null
   const hasInsufficientContext = assistant.data?.answer === '当前课程资料中没有足够信息。'
 
   useEffect(() => {
@@ -71,7 +74,13 @@ export function CourseAssistant({
           </Button>
         </form>
 
-        {assistant.isError ? (
+        {creditError ? (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-800">
+            <p className="font-semibold text-amber-950">课程助手额度不足</p>
+            <p className="mt-1">剩余次数：{creditError.details.remaining ?? 0}。开通或续购本课程权益后即可继续提问。</p>
+            <Button className="mt-3" variant="secondary" onClick={() => navigate(creditError.details.purchase_url ?? `/pricing?course_id=${courseId}&scene=assistant`)}>查看套餐</Button>
+          </div>
+        ) : assistant.isError ? (
           <div className="rounded-xl bg-orange-50 p-3 text-sm leading-6 text-orange-700">
             {assistant.error instanceof ApiError ? assistant.error.message : '课程助手暂时无法回答，请稍后重试。'}
           </div>

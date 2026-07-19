@@ -106,6 +106,7 @@ export function SettingsPage() {
             />
             <div className="sm:col-span-2">
               <ProgressBar value={aiPercentage} label="本月 AI 额度使用率" />
+              <Link className="mt-4 inline-flex min-h-10 items-center justify-center rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700" to="/pricing">购买更多额度</Link>
               {dashboard.isError || usage.isError ? (
                 <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl bg-orange-50 px-3 py-2.5 text-sm text-orange-700">
                   使用情况暂时无法读取。

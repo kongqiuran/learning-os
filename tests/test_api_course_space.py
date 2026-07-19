@@ -7,6 +7,8 @@ from fastapi.testclient import TestClient
 
 from src.api.adapters.assistant_adapter import AssistantAnswer
 from src.api.factory import create_app
+from src.services.entitlement_service import EntitlementQuotaExceeded
+from src.services.quota_service import UsageQuotaExceededError
 
 
 NOW = datetime(2026, 7, 15, tzinfo=timezone.utc)
@@ -143,7 +145,7 @@ class CourseSpaceApiTest(unittest.TestCase):
             ) as reserve_usage,
             patch("src.api.routers.course_space.queue_course_package", return_value=package) as queue,
             patch("src.api.routers.course_space.run_queued_course_package") as run_task,
-            patch("src.api.routers.course_space.consume_assistant"),
+            patch("src.api.routers.course_space.reserve_assistant", return_value=99) as reserve_assistant,
             patch("src.database.get_db_session", return_value=db_context),
             patch(
                 "src.api.routers.course_space.answer_course_question",
@@ -160,9 +162,10 @@ class CourseSpaceApiTest(unittest.TestCase):
         self.assertEqual(generate_response.json()["status"], "pending")
         self.assertEqual(assistant_response.status_code, 200)
         reserve_usage.assert_called_once_with(self.user.id)
-        queue.assert_called_once_with(10, self.user.id)
+        queue.assert_called_once_with(10, self.user.id, usage_record_id=40, quota_source="free_monthly")
         run_task.assert_called_once_with(30, 10, self.user.id)
         answer.assert_called_once_with(10, self.user.id, "Why?", "重点内容")
+        reserve_assistant.assert_called_once_with(self.user.id, 10)
 
     def test_follow_generation_passes_chapter_scope(self):
         package = fake_package(status="pending")
@@ -184,7 +187,36 @@ class CourseSpaceApiTest(unittest.TestCase):
 
         self.assertEqual(response.status_code, 202)
         self.assertEqual(response.json()["scope_chapter_id"], 7)
-        queue.assert_called_once_with(10, self.user.id, "follow", None, 7, False)
+        queue.assert_called_once_with(10, self.user.id, "follow", None, 7, False, 40, None, "free_monthly")
+
+    def test_scene_generation_returns_purchase_context_when_free_quota_is_exhausted(self):
+        with (
+            patch("src.api.routers.course_space.get_course_for_user", return_value=fake_course()),
+            patch("src.api.routers.course_space.get_active_entitlement", return_value=None),
+            patch("src.api.routers.course_space.reserve_ai_generation", side_effect=UsageQuotaExceededError(3, 3, NOW)),
+            patch("src.api.routers.course_space.queue_course_package") as queue,
+        ):
+            response = self.client.post("/api/courses/10/generations/follow?scope_chapter_id=7")
+        self.assertEqual(response.status_code, 429)
+        self.assertEqual(response.json()["error"]["code"], "insufficient_credits")
+        self.assertEqual(response.json()["error"]["quota_source"], "free_monthly")
+        self.assertEqual(response.json()["error"]["purchase_url"], "/pricing?course_id=10&scene=follow")
+        queue.assert_not_called()
+
+    def test_paid_scene_quota_is_reserved_before_task_creation(self):
+        entitlement = SimpleNamespace(id=88)
+        with (
+            patch("src.api.routers.course_space.get_course_for_user", return_value=fake_course()),
+            patch("src.api.routers.course_space.get_active_entitlement", return_value=entitlement),
+            patch("src.api.routers.course_space.reserve_scene", side_effect=EntitlementQuotaExceeded("No allowance.")) as reserve,
+            patch("src.api.routers.course_space.queue_course_package") as queue,
+        ):
+            response = self.client.post("/api/courses/10/generations/textbook?scope_document_id=20")
+        self.assertEqual(response.status_code, 429)
+        self.assertEqual(response.json()["error"]["quota_source"], "course_entitlement")
+        self.assertEqual(response.json()["error"]["scene"], "textbook")
+        reserve.assert_called_once_with(88, "textbook")
+        queue.assert_not_called()
 
     def test_generation_task_status_is_scoped_to_course_owner(self):
         package = fake_package(status="processing")
@@ -226,6 +258,18 @@ class CourseSpaceApiTest(unittest.TestCase):
 
         self.assertEqual(response.status_code, 422)
         self.assertEqual(response.json()["error"]["code"], "invalid_request")
+
+    def test_assistant_requires_course_entitlement_before_calling_ai(self):
+        with (
+            patch("src.api.routers.course_space.get_course_for_user", return_value=fake_course()),
+            patch("src.api.routers.course_space.reserve_assistant", side_effect=EntitlementQuotaExceeded("No allowance.")),
+            patch("src.api.routers.course_space.answer_course_question") as answer,
+        ):
+            response = self.client.post("/api/courses/10/assistant/query", json={"question": "Why?"})
+        self.assertEqual(response.status_code, 429)
+        self.assertEqual(response.json()["error"]["code"], "insufficient_credits")
+        self.assertEqual(response.json()["error"]["remaining"], 0)
+        answer.assert_not_called()
 
 
 if __name__ == "__main__":

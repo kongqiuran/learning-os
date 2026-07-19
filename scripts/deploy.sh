@@ -50,7 +50,7 @@ detect_build_target() {
       frontend/*|nginx.conf)
         frontend_changed=true
         ;;
-      src/*|api_server.py|Dockerfile|requirements.txt|requirements-*.txt)
+      src/*|api_server.py|worker.py|Dockerfile|requirements.txt|requirements-*.txt)
         backend_changed=true
         ;;
       *)
@@ -62,11 +62,11 @@ detect_build_target() {
   if $unknown_changed; then
     BUILD_TARGET="all"
   elif $frontend_changed && $backend_changed; then
-    BUILD_TARGET="frontend backend"
+    BUILD_TARGET="frontend backend worker"
   elif $frontend_changed; then
     BUILD_TARGET="frontend"
   elif $backend_changed; then
-    BUILD_TARGET="backend"
+    BUILD_TARGET="backend worker"
   else
     BUILD_TARGET="all"
   fi
@@ -78,13 +78,13 @@ build_services() {
       log "最近 commit 只影响前端，构建 frontend。"
       docker compose build frontend
       ;;
-    backend)
-      log "最近 commit 只影响后端，构建 backend。"
-      docker compose build backend
+    "backend worker")
+      log "最近 commit 影响后端运行代码，构建 backend 和 worker。"
+      docker compose build backend worker
       ;;
-    "frontend backend")
-      log "最近 commit 同时影响前端和后端，构建两个服务。"
-      docker compose build frontend backend
+    "frontend backend worker")
+      log "最近 commit 同时影响前端和后端，构建 frontend、backend 和 worker。"
+      docker compose build frontend backend worker
       ;;
     *)
       log "无法安全判断修改范围，构建全部服务。"
