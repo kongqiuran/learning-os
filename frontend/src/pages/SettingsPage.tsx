@@ -1,7 +1,9 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   BookOpen,
+  CalendarDays,
   Check,
+  Crown,
   FileText,
   Gauge,
   LogOut,
@@ -62,6 +64,12 @@ export function SettingsPage() {
   const aiUsage = usage.data?.ai_generations
   const aiPercentage = aiUsage?.limit ? Math.round((aiUsage.used / aiUsage.limit) * 100) : 0
   const productsByCode = new Map(products.data?.products.map((product) => [product.product_code, product]) ?? [])
+  const entitlements = usage.data?.course_entitlements ?? []
+  const activeEntitlements = entitlements.filter(isActiveEntitlement)
+  const hasActiveEntitlement = activeEntitlements.length > 0
+  const sortedEntitlements = [...entitlements].sort(
+    (left, right) => Number(isActiveEntitlement(right)) - Number(isActiveEntitlement(left)),
+  )
 
   return (
     <section className="max-w-5xl">
@@ -71,68 +79,114 @@ export function SettingsPage() {
         <p className="mt-2 text-sm text-slate-500">查看当前套餐、额度与账号设置。</p>
       </div>
 
-      {usage.data?.course_entitlements.length ? (
+      {entitlements.length ? (
         <div className="mt-8">
-          <h2 className="text-xl font-semibold text-stone-950">已开通课程权益</h2>
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
-            {usage.data.course_entitlements.map((item) => (
-              <EntitlementCard item={item} product={productsByCode.get(item.product_code)} key={item.id} />
-            ))}
+          <div className={hasActiveEntitlement ? 'rounded-3xl border border-emerald-100 bg-emerald-50/50 p-4 sm:p-6' : ''}>
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2 text-sm font-semibold text-emerald-700">
+                  <Crown className="size-4" />
+                  {hasActiveEntitlement ? '付费权益' : '权益记录'}
+                </div>
+                <h2 className={`${hasActiveEntitlement ? 'mt-2 text-2xl sm:text-3xl' : 'mt-2 text-xl'} font-semibold tracking-tight text-stone-950`}>
+                  {hasActiveEntitlement ? '已开通课程权益' : '课程权益记录'}
+                </h2>
+                {hasActiveEntitlement ? (
+                  <p className="mt-2 text-sm text-stone-600">你购买的课程空间、有效期和剩余额度都在这里。</p>
+                ) : null}
+              </div>
+              {hasActiveEntitlement ? (
+                <span className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-emerald-700 shadow-sm">
+                  {activeEntitlements.length} 个权益使用中
+                </span>
+              ) : null}
+            </div>
+            <div className={`mt-4 grid gap-4 ${hasActiveEntitlement ? 'lg:grid-cols-2' : 'md:grid-cols-2'}`}>
+              {sortedEntitlements.map((item) => (
+                <EntitlementCard
+                  item={item}
+                  product={productsByCode.get(item.product_code)}
+                  featured={isActiveEntitlement(item)}
+                  key={item.id}
+                />
+              ))}
+            </div>
           </div>
         </div>
       ) : null}
 
-      <div className="mt-8 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
-        <Card className="overflow-hidden">
-          <div className="border-b border-slate-100 p-5 sm:p-6">
+      <div className={`mt-8 grid items-start gap-4 ${hasActiveEntitlement ? 'lg:grid-cols-[0.72fr_1.28fr]' : 'lg:grid-cols-[1.1fr_0.9fr]'}`}>
+        <Card className={`overflow-hidden ${hasActiveEntitlement ? 'border-slate-200 bg-slate-50/50 shadow-none' : ''}`}>
+          <div className={`border-b border-slate-100 ${hasActiveEntitlement ? 'p-4 sm:p-5' : 'p-5 sm:p-6'}`}>
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
-                <div className="flex items-center gap-2 text-sm font-semibold text-blue-600">
+                <div className={`flex items-center gap-2 text-sm font-semibold ${hasActiveEntitlement ? 'text-slate-500' : 'text-blue-600'}`}>
                   <Sparkles className="size-4" /> 免费使用额度
                 </div>
-                <div className="mt-3 flex items-center gap-3">
-                  <h2 className="text-3xl font-semibold tracking-tight text-slate-950">每月 AI 额度</h2>
+                <div className={`${hasActiveEntitlement ? 'mt-2' : 'mt-3'} flex items-center gap-3`}>
+                  <h2 className={`${hasActiveEntitlement ? 'text-xl' : 'text-3xl'} font-semibold tracking-tight text-slate-950`}>
+                    每月 AI 额度
+                  </h2>
                   <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
                     <Check className="mr-1 inline size-3" />使用中
                   </span>
                 </div>
-                <p className="mt-2 text-sm text-slate-500">剩余次数与重置时间均由服务器实时返回。</p>
+                <p className={`mt-2 text-sm text-slate-500 ${hasActiveEntitlement ? 'max-w-sm' : ''}`}>
+                  {hasActiveEntitlement ? '免费额度会继续保留，可作为课程权益之外的补充。' : '剩余次数与重置时间均由服务器实时返回。'}
+                </p>
               </div>
-              <span className="grid size-12 place-items-center rounded-2xl bg-blue-50 text-blue-600">
-                <Gauge className="size-6" />
+              <span className={`grid place-items-center rounded-2xl ${hasActiveEntitlement ? 'size-10 bg-white text-slate-500' : 'size-12 bg-blue-50 text-blue-600'}`}>
+                <Gauge className={hasActiveEntitlement ? 'size-5' : 'size-6'} />
               </span>
             </div>
           </div>
 
-          <div className="grid gap-4 p-5 sm:grid-cols-2 sm:p-6">
-            <UsageMetric
-              icon={BookOpen}
-              label="课程数量"
-              value={dashboard.data ? `${dashboard.data.course_count}` : '—'}
-              help="当前创建的课程学习空间"
-            />
-            <UsageMetric
-              icon={Sparkles}
-              label="AI 整理次数"
-              value={aiUsage ? `${aiUsage.used} / ${aiUsage.limit}` : '—'}
-              help={aiUsage ? `${formatResetDate(aiUsage.resets_at)} 重置` : '正在读取本月用量'}
-            />
-            <div className="sm:col-span-2">
-              <ProgressBar value={aiPercentage} label="本月 AI 额度使用率" />
-              <Link className="mt-4 inline-flex min-h-10 items-center justify-center rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700" to="/pricing">购买更多额度</Link>
-              {dashboard.isError || usage.isError || products.isError ? (
-                <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl bg-orange-50 px-3 py-2.5 text-sm text-orange-700">
-                  使用情况暂时无法读取。
-                  <button
-                    className="font-semibold underline underline-offset-2"
-                    onClick={() => Promise.all([dashboard.refetch(), usage.refetch(), products.refetch()])}
-                  >
-                    重新加载
-                  </button>
+          {hasActiveEntitlement ? (
+            <div className="p-4 sm:p-5">
+              <div className="flex items-end justify-between gap-4">
+                <div>
+                  <p className="text-xs font-medium text-slate-500">本月剩余</p>
+                  <strong className="mt-1 block text-2xl font-semibold text-slate-900">
+                    {aiUsage ? `${aiUsage.remaining} / ${aiUsage.limit}` : '—'}
+                  </strong>
                 </div>
+                <p className="text-right text-xs leading-5 text-slate-400">
+                  {aiUsage ? `${formatResetDate(aiUsage.resets_at)} 重置` : '正在读取本月用量'}
+                </p>
+              </div>
+              <div className="mt-4">
+                <ProgressBar value={aiPercentage} label="免费额度使用率" />
+              </div>
+              <Link className="mt-3 inline-flex text-sm font-semibold text-slate-600 hover:text-blue-700" to="/pricing">
+                查看其他套餐
+              </Link>
+              {dashboard.isError || usage.isError || products.isError ? (
+                <UsageLoadError onRetry={() => Promise.all([dashboard.refetch(), usage.refetch(), products.refetch()])} />
               ) : null}
             </div>
-          </div>
+          ) : (
+            <div className="grid gap-4 p-5 sm:grid-cols-2 sm:p-6">
+              <UsageMetric
+                icon={BookOpen}
+                label="课程数量"
+                value={dashboard.data ? `${dashboard.data.course_count}` : '—'}
+                help="当前创建的课程学习空间"
+              />
+              <UsageMetric
+                icon={Sparkles}
+                label="AI 整理次数"
+                value={aiUsage ? `${aiUsage.used} / ${aiUsage.limit}` : '—'}
+                help={aiUsage ? `${formatResetDate(aiUsage.resets_at)} 重置` : '正在读取本月用量'}
+              />
+              <div className="sm:col-span-2">
+                <ProgressBar value={aiPercentage} label="本月 AI 额度使用率" />
+                <Link className="mt-4 inline-flex min-h-10 items-center justify-center rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700" to="/pricing">购买更多额度</Link>
+                {dashboard.isError || usage.isError || products.isError ? (
+                  <UsageLoadError onRetry={() => Promise.all([dashboard.refetch(), usage.refetch(), products.refetch()])} />
+                ) : null}
+              </div>
+            </div>
+          )}
         </Card>
 
         <div className="space-y-4">
@@ -279,31 +333,95 @@ function UsageMetric({ icon: Icon, label, value, help }: { icon: typeof BookOpen
 function EntitlementCard({
   item,
   product,
+  featured,
 }: {
   item: UsageSummaryResponse['course_entitlements'][number]
   product?: BillingProduct
+  featured: boolean
 }) {
+  const price = formatMoney(
+    product?.amount_cents ?? item.amount_cents,
+    product?.currency ?? 'CNY',
+  )
+  const expiry = new Intl.DateTimeFormat('zh-CN', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  }).format(new Date(item.expires_at))
+
   return (
-    <Card className="p-5">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h3 className="font-semibold text-stone-900">{item.course_name}</h3>
-          <p className="mt-1 text-xs text-stone-500">
-            {product?.name ?? item.product_code}
-            {product ? ` · ${formatMoney(product.amount_cents, product.currency)}` : ''}
-            {' · '}有效期至 {new Intl.DateTimeFormat('zh-CN').format(new Date(item.expires_at))}
-          </p>
+    <Card className={featured ? 'overflow-hidden border-emerald-200 bg-white shadow-sm' : 'p-5 opacity-75'}>
+      <div className={featured ? 'border-b border-emerald-100 bg-gradient-to-r from-emerald-50/80 to-white p-5 sm:p-6' : ''}>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className={`text-xs font-semibold ${featured ? 'text-emerald-700' : 'text-stone-500'}`}>
+              {product?.name ?? item.product_code}
+            </p>
+            <h3 className={`${featured ? 'mt-2 text-xl sm:text-2xl' : 'mt-1 font-semibold'} text-stone-950`}>
+              {item.course_name}
+            </h3>
+          </div>
+          <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${featured ? 'bg-emerald-100 text-emerald-800' : 'bg-stone-100 text-stone-600'}`}>
+            {featured ? '权益使用中' : item.status === 'active' ? '已过期' : item.status}
+          </span>
         </div>
-        <span className="rounded-full bg-emerald-50 px-2 py-1 text-xs text-emerald-700">{item.status === 'active' ? '使用中' : item.status}</span>
+        <div className={`mt-4 flex flex-wrap gap-x-5 gap-y-2 ${featured ? 'text-sm' : 'text-xs'} text-stone-600`}>
+          <span className="font-semibold text-stone-900">{price}</span>
+          <span className="inline-flex items-center gap-1.5">
+            <CalendarDays className="size-4 text-emerald-600" />
+            有效期至 {expiry}
+          </span>
+        </div>
       </div>
-      <div className="mt-4 grid grid-cols-2 gap-2 text-xs text-stone-600">
-        <span>跟课整理 {formatAllowance(item.follow_remaining, product?.follow_allowance)}</span>
-        <span>教材分析 {formatAllowance(item.textbook_remaining, product?.textbook_allowance)}</span>
-        <span>考试冲刺 {formatAllowance(item.exam_remaining, product?.exam_allowance)}</span>
-        <span>课程助手 {formatAllowance(item.assistant_remaining, product?.assistant_allowance)}</span>
+      <div className={featured ? 'p-5 sm:p-6' : 'mt-4'}>
+        {featured ? <p className="text-sm font-semibold text-stone-900">剩余权益</p> : null}
+        <div className={`grid grid-cols-2 ${featured ? 'mt-3 gap-3' : 'gap-2'} text-stone-600`}>
+          <AllowanceMetric label="跟课整理" remaining={item.follow_remaining} total={product?.follow_allowance} featured={featured} />
+          <AllowanceMetric label="教材分析" remaining={item.textbook_remaining} total={product?.textbook_allowance} featured={featured} />
+          <AllowanceMetric label="考试冲刺" remaining={item.exam_remaining} total={product?.exam_allowance} featured={featured} />
+          <AllowanceMetric label="课程助手" remaining={item.assistant_remaining} total={product?.assistant_allowance} featured={featured} />
+        </div>
       </div>
     </Card>
   )
+}
+
+function AllowanceMetric({
+  label,
+  remaining,
+  total,
+  featured,
+}: {
+  label: string
+  remaining: number
+  total?: number
+  featured: boolean
+}) {
+  if (!featured) {
+    return <span className="text-xs">{label} {formatAllowance(remaining, total)}</span>
+  }
+  return (
+    <div className="rounded-2xl border border-stone-100 bg-stone-50/80 p-3">
+      <p className="text-xs text-stone-500">{label}</p>
+      <strong className="mt-1 block text-lg font-semibold text-stone-950">{remaining}</strong>
+      <p className="mt-0.5 text-[11px] text-stone-400">{total == null ? '次可用' : `共 ${total} 次`}</p>
+    </div>
+  )
+}
+
+function UsageLoadError({ onRetry }: { onRetry: () => Promise<unknown> }) {
+  return (
+    <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl bg-orange-50 px-3 py-2.5 text-sm text-orange-700">
+      使用情况暂时无法读取。
+      <button className="font-semibold underline underline-offset-2" onClick={() => void onRetry()}>
+        重新加载
+      </button>
+    </div>
+  )
+}
+
+function isActiveEntitlement(item: UsageSummaryResponse['course_entitlements'][number]) {
+  return item.status === 'active' && new Date(item.expires_at).getTime() >= Date.now()
 }
 
 function formatAllowance(remaining: number, total?: number) {
