@@ -31,6 +31,8 @@ class UploadExperienceFrontendContractTest(unittest.TestCase):
         self.assertIn("UPLOAD_CATEGORIES.filter", materials)
         self.assertIn("openUpload(category.type)", materials)
         self.assertIn("initialDocumentType={uploadType}", materials)
+        self.assertIn("添加第一份学习资料", materials)
+        self.assertIn("action={uploadCategories[0]", materials)
 
     def test_dialog_submits_selected_type_without_changing_upload_api(self):
         dialog = (
@@ -56,6 +58,8 @@ class UploadExperienceFrontendContractTest(unittest.TestCase):
         self.assertIn("xhr.upload.addEventListener('progress'", api)
         self.assertIn("progress.percent", dialog)
         self.assertIn("服务器保存中", dialog)
+        self.assertIn("文件仍已选中，可以直接重新上传", dialog)
+        self.assertIn("重新上传", dialog)
         self.assertIn("proxy_request_buffering off;", nginx)
 
 

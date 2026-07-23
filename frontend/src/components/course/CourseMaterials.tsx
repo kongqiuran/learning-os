@@ -27,6 +27,7 @@ export function CourseMaterials({
   title = '学习资料',
   description = '这些资料将作为当前学习场景的分析依据。',
   showDocumentList = true,
+  onUploaded,
 }: {
   courseId: string | undefined
   documents: DocumentSummary[]
@@ -35,6 +36,7 @@ export function CourseMaterials({
   title?: string
   description?: string
   showDocumentList?: boolean
+  onUploaded?: () => void
 }) {
   const [uploadOpen, setUploadOpen] = useState(false)
   const [uploadType, setUploadType] = useState<DocumentType>(allowedDocumentTypes[0])
@@ -83,7 +85,8 @@ export function CourseMaterials({
             <StatePanel
               variant="empty"
               title="添加第一份学习资料"
-              description="从上方选择与当前学习场景对应的资料类别。"
+              description={`建议先${uploadCategories[0]?.action ?? '上传资料'}。上传完成后，就可以开始第一次 AI 整理。`}
+              action={uploadCategories[0] ? <Button onClick={() => openUpload(uploadCategories[0].type)}><FilePlus2 className="size-4" />{uploadCategories[0].action}</Button> : null}
             />
           </div>
         ) : showDocumentList ? (
@@ -106,6 +109,7 @@ export function CourseMaterials({
         initialDocumentType={uploadType}
         allowedDocumentTypes={allowedDocumentTypes}
         chapterId={chapterId}
+        onUploaded={onUploaded}
         onClose={() => setUploadOpen(false)}
       />
     </section>

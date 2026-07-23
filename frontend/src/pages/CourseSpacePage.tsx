@@ -17,6 +17,7 @@ import { NavLink, useNavigate, useParams } from 'react-router-dom'
 
 import { CourseAssistant } from '../components/course/CourseAssistant'
 import { CourseMaterials } from '../components/course/CourseMaterials'
+import { FirstCourseGuide } from '../components/course/FirstCourseGuide'
 import { LearningPackageView } from '../components/course/LearningPackageView'
 import { SCENE_UPLOAD_TYPES } from '../components/course/uploadCategories'
 import { KnowledgeCard } from '../components/domain/KnowledgeCard'
@@ -28,7 +29,7 @@ import { useCurrentUser } from '../hooks/useCurrentUser'
 import { useCourseKnowledge } from '../hooks/useKnowledge'
 import { api, ApiError } from '../lib/api'
 import { asCreditError, purchaseUrl } from '../lib/billing'
-import { isTaskActive } from '../lib/tasks'
+import { isTaskActive, taskStatus } from '../lib/tasks'
 import type { Chapter, DocumentSummary, LearningPackage } from '../types/api'
 
 type Scene = 'follow' | 'textbook' | 'exam'
@@ -136,8 +137,8 @@ export function CourseSpacePage({ scene }: { scene: Scene }) {
 
   if (!courseSpace.data) {
     return courseSpace.isPending
-      ? <StatePanel variant="loading" title="正在打开课程" />
-      : <StatePanel variant="error" title="无法打开课程" action={<Button onClick={() => navigate('/dashboard')}>返回课程列表</Button>} />
+      ? <StatePanel variant="loading" title="正在打开课程" description="正在读取课程、资料和最近的整理状态。" />
+      : <StatePanel variant="error" title="无法打开课程" description="可能是网络暂时中断，或课程已经不存在。" action={<div className="flex flex-wrap justify-center gap-2"><Button onClick={() => courseSpace.refetch()}>重新加载</Button><Button variant="secondary" onClick={() => navigate('/dashboard')}>返回课程列表</Button></div>} />
   }
 
   const { course, documents, chapters } = courseSpace.data
@@ -196,6 +197,15 @@ export function CourseSpacePage({ scene }: { scene: Scene }) {
         </nav>
       </header>
 
+      {scene === 'follow' && courseId ? (
+        <FirstCourseGuide
+          courseId={courseId}
+          hasDocuments={filteredDocuments.length > 0}
+          generating={isGenerating}
+          completed={taskStatus(completedScopedPackage) === 'SUCCESS'}
+        />
+      ) : null}
+
       {scene === 'follow' ? (
         <div className="mt-6 grid gap-5 lg:grid-cols-[270px_minmax(0,1fr)]">
           <Card className="p-4 lg:sticky lg:top-24 lg:self-start">
@@ -233,6 +243,7 @@ export function CourseSpacePage({ scene }: { scene: Scene }) {
               chapterId={normalizedChapterId}
               title={selectedChapter?.title ? `${selectedChapter.title}的资料` : '未分章节资料'}
               description="上传课件、练习或补充资料，新资料会直接归入当前章节。"
+              onUploaded={() => window.setTimeout(() => document.getElementById('ai-learning-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 250)}
             />
             <LearningSection courseId={courseId} scene={scene} title={selectedChapter?.title ?? '未分章节'} packageData={displayedPackage} previousPackage={completedScopedPackage} generating={isGenerating} canGenerate={filteredDocuments.length > 0} onGenerate={() => generate.mutate(selectedChapterId == null ? { unassigned: true } : { chapterId: selectedChapterId })} onSelectSection={openAssistant} sections={sceneInfo.follow.sections} emptyDescription="先上传当前章节的课件、练习或补充资料，再开始整理。" error={requestMatchesSelection ? generate.error : null} />
           </div>
@@ -293,7 +304,7 @@ function LearningSection({ courseId, scene, title, packageData, previousPackage,
   const navigate = useNavigate()
   const creditError = asCreditError(error)
   return (
-    <section>
+    <section id="ai-learning-section" className="scroll-mt-24">
       <div className="mb-3"><h2 className="text-xl font-semibold text-stone-950">{title ? `${title} · AI 整理结果` : 'AI 整理结果'}</h2><p className="mt-1 text-sm text-stone-500">{title ? '只使用当前章节中的资料，结果不会与其他章节混合。' : '仅根据当前场景中的资料生成。'}</p></div>
       {creditError ? (
         <Card className="mb-4 border-amber-200 bg-amber-50/70 p-5">

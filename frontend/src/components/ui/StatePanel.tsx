@@ -20,7 +20,11 @@ export function StatePanel({ variant, title, description, action }: StatePanelPr
   const Icon = icons[variant]
 
   return (
-    <div className="flex min-h-56 flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-10 text-center">
+    <div
+      className="flex min-h-56 flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-10 text-center"
+      role={variant === 'loading' ? 'status' : variant === 'error' ? 'alert' : undefined}
+      aria-live={variant === 'loading' ? 'polite' : undefined}
+    >
       <span className="mb-4 grid size-11 place-items-center rounded-xl bg-slate-100 text-slate-500">
         <Icon className={variant === 'loading' ? 'size-5 animate-spin' : 'size-5'} />
       </span>

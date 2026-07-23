@@ -32,9 +32,9 @@ export function WelcomeGuide({ userId, onCreateCourse }: { userId: number; onCre
         <X className="size-4" />
       </button>
       <p className="text-sm font-semibold text-blue-600">欢迎使用 Learning OS</p>
-      <h2 className="mt-2 pr-10 text-2xl font-semibold tracking-tight text-slate-950">三步建立你的课程学习空间</h2>
+      <h2 className="mt-2 pr-10 text-2xl font-semibold tracking-tight text-slate-950">创建你的第一门课程</h2>
       <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-        从一门正在学习的课程开始，整个过程通常只需要几分钟。引导不会阻止你使用其他功能。
+        不需要提前学习怎么使用：创建课程后，我们会继续带你上传资料并开始第一次 AI 整理。
       </p>
 
       <div className="mt-5 grid gap-3 md:grid-cols-3">

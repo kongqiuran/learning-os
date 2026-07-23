@@ -3,14 +3,16 @@ import { useEffect, useState, type FormEvent } from 'react'
 
 import { useCreateCourse } from '../../hooks/useDashboard'
 import { ApiError } from '../../lib/api'
+import type { CourseSummary } from '../../types/api'
 import { Button } from '../ui/Button'
 
 interface CreateCourseDialogProps {
   open: boolean
   onClose: () => void
+  onCreated?: (course: CourseSummary) => void
 }
 
-export function CreateCourseDialog({ open, onClose }: CreateCourseDialogProps) {
+export function CreateCourseDialog({ open, onClose, onCreated }: CreateCourseDialogProps) {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const createCourse = useCreateCourse()
@@ -31,10 +33,11 @@ export function CreateCourseDialog({ open, onClose }: CreateCourseDialogProps) {
     createCourse.mutate(
       { name, description: description || undefined },
       {
-        onSuccess: () => {
+        onSuccess: (course) => {
           setName('')
           setDescription('')
           onClose()
+          onCreated?.(course)
         },
       },
     )
@@ -53,7 +56,7 @@ export function CreateCourseDialog({ open, onClose }: CreateCourseDialogProps) {
           <div>
             <p className="text-sm font-semibold text-blue-600">新课程</p>
             <h2 id="create-course-title" className="mt-1 text-xl font-semibold text-slate-950">创建课程</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-500">先建立课程，下一步再添加对应的学习资料。</p>
+            <p className="mt-2 text-sm leading-6 text-slate-500">第 1 步，共 3 步。创建后会直接带你上传第一份资料。</p>
           </div>
           <button className="grid size-9 place-items-center rounded-xl text-slate-500 hover:bg-slate-100" onClick={onClose} aria-label="关闭创建课程窗口">
             <X className="size-4" />

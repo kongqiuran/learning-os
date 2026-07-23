@@ -12,6 +12,7 @@ export function UploadDocumentDialog({
   initialDocumentType,
   allowedDocumentTypes,
   chapterId,
+  onUploaded,
   onClose,
 }: {
   courseId: string | undefined
@@ -19,6 +20,7 @@ export function UploadDocumentDialog({
   initialDocumentType: DocumentType
   allowedDocumentTypes: DocumentType[]
   chapterId?: number | null
+  onUploaded?: () => void
   onClose: () => void
 }) {
   const [file, setFile] = useState<File | null>(null)
@@ -48,6 +50,7 @@ export function UploadDocumentDialog({
         onSuccess: () => {
           setFile(null)
           onClose()
+          onUploaded?.()
         },
       },
     )
@@ -116,10 +119,10 @@ export function UploadDocumentDialog({
               </div>
             </div>
           ) : null}
-          {upload.isError ? <p className="rounded-xl bg-orange-50 px-3 py-2.5 text-sm text-orange-700">{upload.error instanceof ApiError ? upload.error.message : '资料上传失败，请稍后重试。'}</p> : null}
+          {upload.isError ? <p className="rounded-xl bg-orange-50 px-3 py-2.5 text-sm text-orange-700">{upload.error instanceof ApiError ? upload.error.message : '资料上传失败，请稍后重试。'} 文件仍已选中，可以直接重新上传。</p> : null}
           <div className="flex justify-end gap-3 pt-2">
             <Button variant="secondary" onClick={onClose} disabled={upload.isPending}>取消</Button>
-            <Button type="submit" disabled={!file || upload.isPending}>{upload.isPending ? (progress?.phase === 'saving' ? '服务器保存中' : `正在上传 ${progress?.percent ?? 0}%`) : '上传资料'}</Button>
+            <Button type="submit" disabled={!file || upload.isPending}>{upload.isPending ? (progress?.phase === 'saving' ? '服务器保存中' : `正在上传 ${progress?.percent ?? 0}%`) : upload.isError ? '重新上传' : '上传资料'}</Button>
           </div>
         </form>
       </section>

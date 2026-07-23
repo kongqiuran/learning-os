@@ -19,7 +19,7 @@ export function RegisterPage() {
     mutationFn: () => api.register(email, password, confirmPassword, acceptedTerms),
     onSuccess: (data) => {
       queryClient.setQueryData(currentUserQueryKey, data)
-      navigate('/dashboard', { replace: true })
+      navigate('/dashboard?create=1', { replace: true })
     },
   })
 
