@@ -16,9 +16,12 @@ STAGE_PROGRESS = {
     "recovered": ("queued", 0),
     "retry_queued": ("queued", 0),
     "starting": ("preparing", 5),
-    "document_analyzer": ("document_analysis", 25),
-    "course_analyzer": ("knowledge_generation", 60),
-    "follow_chapter_generator": ("knowledge_generation", 70),
+    "parsing": ("parsing", 10),
+    "rendering": ("rendering", 30),
+    "vision_analysis": ("vision_analysis", 40),
+    "document_analyzer": ("knowledge_generation", 65),
+    "course_analyzer": ("knowledge_generation", 70),
+    "follow_chapter_generator": ("knowledge_generation", 75),
     "learning_package_generator": ("content_generation", 85),
     "completed": ("completed", 100),
 }
@@ -53,7 +56,16 @@ def create_package_task(session, user_id, course_id, scene):
     return task
 
 
-def sync_package_task(session, package, user_id, status=None, stage=None, error_code=None, error_detail=None):
+def sync_package_task(
+    session,
+    package,
+    user_id,
+    status=None,
+    stage=None,
+    error_code=None,
+    error_detail=None,
+    progress=None,
+):
     task = package.task
     if task is None:
         task = create_package_task(session, user_id, package.course_id, package.scene)
@@ -64,12 +76,17 @@ def sync_package_task(session, package, user_id, status=None, stage=None, error_
     previous_status = task.status
     previous_stage = task.current_stage
     target_status = status or PACKAGE_STATUS_TO_TASK_STATUS.get(package.status, "PENDING")
-    normalized_stage, progress = _stage_details(stage or package.current_stage, target_status, task.progress)
+    normalized_stage, next_progress = _stage_details(
+        stage or package.current_stage,
+        target_status,
+        task.progress,
+        progress,
+    )
     now = datetime.now(timezone.utc)
 
     task.status = target_status
     task.current_stage = normalized_stage
-    task.progress = progress
+    task.progress = next_progress
     task.updated_at = now
     if target_status == "RUNNING" and task.started_at is None:
         task.started_at = now
@@ -117,10 +134,15 @@ def fail_package_task(session, package, user_id, error_code, error_detail):
     )
 
 
-def _stage_details(stage, status, current_progress):
+def _stage_details(stage, status, current_progress, requested_progress=None):
     if status == "SUCCESS":
         return "completed", 100
     normalized_stage, configured_progress = STAGE_PROGRESS.get(stage, (stage or "processing", current_progress or 0))
     if status == "PENDING":
         return "queued", 0
-    return normalized_stage, configured_progress
+    selected_progress = (
+        configured_progress
+        if requested_progress is None
+        else max(0, min(100, int(requested_progress)))
+    )
+    return normalized_stage, max(int(current_progress or 0), selected_progress)

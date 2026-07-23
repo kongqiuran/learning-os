@@ -10,7 +10,7 @@ from src.auth.password import verify_password
 from src.config import BASE_DIR, UPLOAD_DIR
 from src.database import get_db_session
 from src.models import Document, User
-from src.storage import delete_document_file
+from src.storage import delete_document_file, delete_user_derivatives
 
 
 logger = logging.getLogger(__name__)
@@ -75,6 +75,14 @@ class AccountDeletionService:
             quarantine_path,
             file_paths,
         )
+        try:
+            deleted_file_count += delete_user_derivatives(user_id)
+        except (OSError, ValueError):
+            cleanup_errors += 1
+            logger.exception(
+                "Failed to purge derived account files.",
+                extra={"deletion_id": deletion_id, "user_id": int(user_id)},
+            )
         return AccountDeletionResult(
             deletion_id=deletion_id,
             deleted_file_count=deleted_file_count,

@@ -15,6 +15,7 @@ services:
     volumes:
       - database:/data/database
       - uploads:/data/uploads
+      - derived:/data/derived
     restart: unless-stopped
     healthcheck:
       test:
@@ -41,6 +42,7 @@ services:
     volumes:
       - database:/data/database
       - uploads:/data/uploads
+      - derived:/data/derived
     restart: unless-stopped
     healthcheck:
       test:
@@ -93,3 +95,5 @@ volumes:
     name: learning-os-database
   uploads:
     name: learning-os-uploads
+  derived:
+    name: learning-os-derived

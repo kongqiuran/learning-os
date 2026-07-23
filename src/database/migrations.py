@@ -47,6 +47,7 @@ MIGRATIONS = (
             "task_id": "INTEGER REFERENCES tasks(id) ON DELETE SET NULL",
         },
     }),
+    ("20260723_document_pages", {}),
 )
 
 
@@ -68,6 +69,10 @@ def run_schema_migrations(engine):
                 from src.models.task import Task
 
                 Task.__table__.create(bind=connection, checkfirst=True)
+            if version == "20260723_document_pages":
+                from src.models.document_page import DocumentPage
+
+                DocumentPage.__table__.create(bind=connection, checkfirst=True)
             for table_name, columns in tables.items():
                 existing = {column["name"] for column in inspector.get_columns(table_name)}
                 for name, definition in columns.items():

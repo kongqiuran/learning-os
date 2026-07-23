@@ -48,3 +48,10 @@
 }
 
 importance 必须是 1-5 的整数。公式不仅包括定义式，也包括重要性质、变换规则、判定条件和常用计算关系；不要只选少数代表公式。资料确实没有公式时 formulas 可以为空数组。
+
+输入可能包含 document_text，也可能包含 document_understanding。后者按页提供：
+- text：该页可提取文字
+- vision_result：视觉模型从图片、图表、公式截图和页面布局中识别的原始事实
+- analysis_status：页面视觉分析状态
+
+使用 document_understanding 时，必须综合文字和视觉事实，但不要把视觉模型的推测当作确定事实。优先使用带有明确 evidence 的重点判断。不要在输出中复制原始 vision_result，也不要改变输出 JSON 结构。

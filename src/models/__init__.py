@@ -3,6 +3,7 @@ from src.models.chapter import Chapter
 from src.models.course_entitlement import CourseEntitlement
 from src.models.document import Document
 from src.models.document_analysis import DocumentAnalysis
+from src.models.document_page import DocumentPage
 from src.models.knowledge import Knowledge
 from src.models.knowledge_view import KnowledgeView
 from src.models.learning_package import LearningPackage
@@ -21,6 +22,7 @@ __all__ = [
     "CourseEntitlement",
     "Document",
     "DocumentAnalysis",
+    "DocumentPage",
     "Knowledge",
     "KnowledgeView",
     "LearningPackage",

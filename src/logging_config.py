@@ -20,6 +20,13 @@ CONTEXT_FIELDS = (
     "stage",
     "duration_ms",
     "attempt",
+    "page_number",
+    "requires_vision",
+    "routing_reason",
+    "provider",
+    "model",
+    "input_tokens",
+    "output_tokens",
 )
 
 

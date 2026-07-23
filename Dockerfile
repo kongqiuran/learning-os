@@ -23,7 +23,7 @@ COPY worker.py ./
 COPY src ./src
 COPY scripts ./scripts
 
-RUN mkdir -p /data/database /data/uploads \
+RUN mkdir -p /data/database /data/uploads /data/derived \
     && chown -R learningos:learningos /app /data
 
 USER learningos

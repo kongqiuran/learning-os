@@ -4,10 +4,15 @@ from sqlalchemy import func, select
 
 from src.ai.analyzers.course_analyzer import analyze_course_documents
 from src.ai.analyzers.document_analyzer import analyze_document
+from src.ai.document.pipeline import (
+    DOCUMENT_INTELLIGENCE_PIPELINE_VERSION,
+    understand_pdf,
+)
 from src.ai.generators.follow_chapter_generator import generate_follow_chapter_package
 from src.ai.generators.learning_package_generator import generate_learning_package
 from src.ai.llm_client import LLMClient
-from src.config import get_max_chars_per_request
+from src.ai.providers.qwen_vision_provider import QwenVisionProvider
+from src.config import get_max_chars_per_request, get_vision_config
 from src.database import get_db_session
 from src.models import Course, Document, DocumentAnalysis, LearningPackage
 from src.services.file_parser_service import extract_text, get_source_type
@@ -106,6 +111,7 @@ def analyze_course(course_id, user_id, llm_client=None, language="zh", package_i
                     user_id,
                     client,
                     language,
+                    package.id,
                     package.task_id,
                 )
             )
@@ -441,12 +447,26 @@ def _start_existing_package(package_id, course_id, user_id):
     return package
 
 
-def _update_package_progress(package_id, course_id, user_id, stage, retry_count):
+def _update_package_progress(
+    package_id,
+    course_id,
+    user_id,
+    stage,
+    retry_count=0,
+    progress=None,
+):
     with get_db_session() as session:
         package = _require_scoped_package(session, package_id, course_id, user_id)
         package.current_stage = stage
         package.retry_count = int(retry_count)
-        sync_package_task(session, package, user_id, status="RUNNING", stage=stage)
+        sync_package_task(
+            session,
+            package,
+            user_id,
+            status="RUNNING",
+            stage=stage,
+            progress=progress,
+        )
 
 
 def _require_scoped_course(session, course_id, user_id):
@@ -515,8 +535,19 @@ def _get_or_create_document_analysis(
     user_id,
     llm_client,
     language="zh",
+    package_id=None,
     task_id=None,
 ):
+    source_type = get_source_type(document.file_path, document.mime_type)
+    vision_config = get_vision_config()
+    document_intelligence_enabled = (
+        source_type == "PDF" and vision_config.enabled
+    )
+    vision_provider_available = bool(
+        document_intelligence_enabled
+        and QwenVisionProvider(config=vision_config).is_available()
+    )
+    existing_id = None
     with get_db_session() as session:
         stored_document = _require_scoped_document(
             session,
@@ -527,7 +558,19 @@ def _get_or_create_document_analysis(
         existing = session.scalar(
             select(DocumentAnalysis).where(DocumentAnalysis.document_id == document.id)
         )
-        if existing is not None:
+        existing_id = existing.id if existing is not None else None
+        existing_pipeline_version = (
+            (existing.analysis_json or {}).get("_pipeline_version")
+            if existing is not None
+            else None
+        )
+        should_refresh = bool(
+            existing is not None
+            and document_intelligence_enabled
+            and vision_provider_available
+            and existing_pipeline_version != DOCUMENT_INTELLIGENCE_PIPELINE_VERSION
+        )
+        if existing is not None and not should_refresh:
             stored_document.processing_status = "completed"
             logger.info(
                 "Document analysis cache hit.",
@@ -555,22 +598,56 @@ def _get_or_create_document_analysis(
                 "course_id": course_id,
             },
         )
-        text = extract_text(document.file_path, document.mime_type)
-        source_type = get_source_type(document.file_path, document.mime_type)
-        result = analyze_document(
-            document.document_type,
-            source_type,
-            text[: get_max_chars_per_request()],
-            llm_client=llm_client,
-            language=language,
-        )
-        analysis = DocumentAnalysis(
-            document_id=document.id,
-            summary=result["summary"],
-            topics=result["topics"],
-            importance_map=result["importance_map"],
-            analysis_json=result,
-        )
+        if document_intelligence_enabled:
+            understanding = understand_pdf(
+                document,
+                user_id=user_id,
+                course_id=course_id,
+                task_id=task_id,
+                progress_callback=lambda **state: _update_package_progress(
+                    package_id,
+                    course_id,
+                    user_id,
+                    state["stage"],
+                    progress=state["progress"],
+                ),
+            )
+            _update_package_progress(
+                package_id,
+                course_id,
+                user_id,
+                "knowledge_generation",
+                progress=65,
+            )
+            result = analyze_document(
+                document.document_type,
+                source_type,
+                llm_client=llm_client,
+                language=language,
+                document_understanding=understanding.to_prompt_payload(
+                    get_max_chars_per_request()
+                ),
+            )
+            required_visual_pages = any(
+                page.requires_vision for page in understanding.pages
+            )
+            result["_pipeline_version"] = (
+                DOCUMENT_INTELLIGENCE_PIPELINE_VERSION
+                if understanding.vision_provider_available
+                or not required_visual_pages
+                else "text-v1"
+            )
+            result["_vision_degraded"] = understanding.degraded
+        else:
+            text = extract_text(document.file_path, document.mime_type)
+            result = analyze_document(
+                document.document_type,
+                source_type,
+                text[: get_max_chars_per_request()],
+                llm_client=llm_client,
+                language=language,
+            )
+            result["_pipeline_version"] = "text-v1"
         with get_db_session() as session:
             stored_document = _require_scoped_document(
                 session,
@@ -578,7 +655,19 @@ def _get_or_create_document_analysis(
                 course_id,
                 user_id,
             )
-            session.add(analysis)
+            analysis = session.scalar(
+                select(DocumentAnalysis).where(
+                    DocumentAnalysis.document_id == document.id
+                )
+            )
+            if analysis is None:
+                analysis = DocumentAnalysis(document_id=document.id)
+                session.add(analysis)
+            analysis.summary = result["summary"]
+            analysis.topics = result["topics"]
+            analysis.importance_map = result["importance_map"]
+            analysis.analysis_json = result
+            analysis.created_at = datetime.now(timezone.utc)
             stored_document.processing_status = "completed"
             session.flush()
         logger.info(
@@ -603,7 +692,9 @@ def _get_or_create_document_analysis(
                 course_id,
                 user_id,
             )
-            stored_document.processing_status = "failed"
+            stored_document.processing_status = (
+                "completed" if existing_id is not None else "failed"
+            )
         logger.exception(
             "Document parsing or analysis failed.",
             extra={

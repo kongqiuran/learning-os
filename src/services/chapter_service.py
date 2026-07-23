@@ -2,7 +2,7 @@ from sqlalchemy import func, select
 
 from src.database import get_db_session
 from src.models import Chapter, Course, Document
-from src.storage import delete_document_file
+from src.storage import delete_document_derivatives, delete_document_file
 
 
 def list_chapters(course_id, user_id):
@@ -56,7 +56,7 @@ def move_document(document_id, course_id, user_id, chapter_id):
 def delete_chapter(chapter_id, course_id, user_id, material_action):
     if material_action not in {"keep_unassigned", "delete"}:
         raise ValueError("material_action must be keep_unassigned or delete.")
-    paths = []
+    deleted_documents = []
     with get_db_session() as session:
         chapter = _get(session, chapter_id, course_id, user_id)
         if chapter is None:
@@ -66,12 +66,15 @@ def delete_chapter(chapter_id, course_id, user_id, material_action):
             for document in documents:
                 document.chapter_id = None
         else:
-            paths = [document.file_path for document in documents]
+            deleted_documents = [
+                (document.id, document.file_path) for document in documents
+            ]
             for document in documents:
                 session.delete(document)
         session.delete(chapter)
-    for path in paths:
+    for document_id, path in deleted_documents:
         delete_document_file(path)
+        delete_document_derivatives(user_id, course_id, document_id)
     return True
 
 

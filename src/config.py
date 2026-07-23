@@ -21,6 +21,7 @@ def _resolve_data_dir():
 DATA_DIR = _resolve_data_dir()
 OUTPUT_DIR = DATA_DIR / "outputs"
 UPLOAD_DIR = DATA_DIR / "uploads"
+DERIVED_DIR = DATA_DIR / "derived"
 DEFAULT_DATABASE_PATH = DATA_DIR / "database" / "learning_os.db"
 DEFAULT_PRIVACY_POLICY_VERSION = "2026.07.01-v1"
 CURRENT_PRIVACY_POLICY_VERSION = (
@@ -39,6 +40,19 @@ class LLMConfig:
     max_attempts: int
 
 
+@dataclass(frozen=True)
+class VisionConfig:
+    enabled: bool
+    provider: str
+    api_key: str
+    base_url: str
+    model: str
+    timeout_seconds: float
+    max_attempts: int
+    max_pages_per_document: int
+    render_dpi: int
+
+
 def get_llm_config():
     load_dotenv(ENV_FILE, override=False)
     return LLMConfig(
@@ -49,6 +63,41 @@ def get_llm_config():
         timeout_seconds=_get_float_setting("LLM_TIMEOUT_SECONDS", 120.0, 30.0, 300.0),
         max_attempts=_get_int_setting("LLM_MAX_ATTEMPTS", 3, 1, 4),
     )
+
+
+def get_vision_config():
+    load_dotenv(ENV_FILE, override=False)
+    return VisionConfig(
+        enabled=_get_boolean_setting("DOCUMENT_INTELLIGENCE_ENABLED", True),
+        provider=os.getenv("VISION_PROVIDER", "qwen").strip().lower(),
+        api_key=os.getenv("QWEN_API_KEY", "").strip(),
+        base_url=os.getenv(
+            "QWEN_BASE_URL",
+            "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        ).strip(),
+        model=os.getenv("QWEN_VISION_MODEL", "").strip(),
+        timeout_seconds=_get_float_setting(
+            "QWEN_TIMEOUT_SECONDS",
+            120.0,
+            30.0,
+            300.0,
+        ),
+        max_attempts=_get_int_setting("QWEN_MAX_ATTEMPTS", 2, 1, 3),
+        max_pages_per_document=_get_int_setting(
+            "VISION_MAX_PAGES_PER_DOCUMENT",
+            20,
+            1,
+            100,
+        ),
+        render_dpi=_get_int_setting("DOCUMENT_PAGE_RENDER_DPI", 144, 96, 216),
+    )
+
+
+def _get_boolean_setting(name, default):
+    value = os.getenv(name)
+    if value is None:
+        return bool(default)
+    return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _get_float_setting(name, default, minimum, maximum):

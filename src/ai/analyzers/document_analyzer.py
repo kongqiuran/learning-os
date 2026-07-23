@@ -4,21 +4,31 @@ from src.ai.llm_client import LLMClient
 from src.ai.prompt_manager import get_prompt
 
 
-def analyze_document(document_type, source_type, document_text, llm_client=None, language="zh"):
-    if not document_text.strip():
+def analyze_document(
+    document_type,
+    source_type,
+    document_text=None,
+    llm_client=None,
+    language="zh",
+    document_understanding=None,
+):
+    if document_understanding is None and not str(document_text or "").strip():
         raise ValueError("Document text is empty.")
+    if document_understanding is not None and not document_understanding.get("pages"):
+        raise ValueError("Document understanding contains no pages.")
     client = llm_client or LLMClient()
+    request_payload = {
+        "document_type": document_type,
+        "source_type": source_type,
+        "language": language,
+    }
+    if document_understanding is None:
+        request_payload["document_text"] = document_text
+    else:
+        request_payload["document_understanding"] = document_understanding
     result = client.generate(
         get_prompt("document_analyzer"),
-        json.dumps(
-            {
-                "document_type": document_type,
-                "source_type": source_type,
-                "document_text": document_text,
-                "language": language,
-            },
-            ensure_ascii=False,
-        ),
+        json.dumps(request_payload, ensure_ascii=False),
         stage="document_analyzer",
     )
     topics = list(result.get("topics", []))

@@ -59,3 +59,8 @@ class Document(Base):
         cascade="all, delete-orphan",
         uselist=False,
     )
+    pages: Mapped[list["DocumentPage"]] = relationship(
+        back_populates="document",
+        cascade="all, delete-orphan",
+        order_by="DocumentPage.page_number",
+    )

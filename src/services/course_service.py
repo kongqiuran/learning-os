@@ -2,7 +2,7 @@ from sqlalchemy import delete, select
 
 from src.database import get_db_session
 from src.models import Course, Document
-from src.storage import delete_document_file
+from src.storage import delete_course_derivatives, delete_document_file
 from src.logging_config import get_logger
 
 
@@ -87,5 +87,6 @@ def delete_course_for_user(course_id, user_id):
     if result.rowcount > 0:
         for file_path in file_paths:
             delete_document_file(file_path)
+        delete_course_derivatives(user_id, course_id)
         return True
     return False

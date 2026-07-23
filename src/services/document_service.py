@@ -5,7 +5,11 @@ from sqlalchemy import delete, select
 from src.config import get_max_upload_size
 from src.database import get_db_session
 from src.models import Course, Document
-from src.storage import delete_document_file, save_document_bytes
+from src.storage import (
+    delete_document_derivatives,
+    delete_document_file,
+    save_document_bytes,
+)
 from src.logging_config import get_logger
 
 
@@ -125,6 +129,9 @@ def delete_document_for_user(document_id, user_id, course_id):
         if document is None:
             return False
         file_path = document.file_path
+        document_owner = document.user_id
+        document_course = document.course_id
+        stored_document_id = document.id
         session.execute(
             delete(Document).where(
                 Document.id == int(document_id),
@@ -134,6 +141,11 @@ def delete_document_for_user(document_id, user_id, course_id):
         )
 
     delete_document_file(file_path)
+    delete_document_derivatives(
+        document_owner,
+        document_course,
+        stored_document_id,
+    )
     return True
 
 
