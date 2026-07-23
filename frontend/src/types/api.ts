@@ -225,6 +225,16 @@ export interface PaymentOrderCreateInput {
   request_key: string
 }
 
+export interface AdminPaymentOrder extends PaymentOrder {
+  user_email: string
+  course_name: string
+  product_name: string
+}
+
+export interface AdminPaymentOrderListResponse {
+  orders: AdminPaymentOrder[]
+}
+
 export interface PrivacyPolicyCurrentResponse {
   policy_version: string
 }

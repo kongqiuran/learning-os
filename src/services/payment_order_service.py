@@ -3,6 +3,7 @@ from uuid import uuid4
 
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import joinedload
 
 from src.billing.product_catalog import get_billing_product
 from src.database import get_db_session
@@ -97,6 +98,27 @@ def get_payment_order_for_user(order_no, user_id):
         )
 
 
+def list_payment_orders(status=None):
+    with get_db_session() as session:
+        statement = (
+            select(PaymentOrder)
+            .options(joinedload(PaymentOrder.user), joinedload(PaymentOrder.course))
+            .order_by(PaymentOrder.created_at.desc(), PaymentOrder.id.desc())
+        )
+        if status is not None:
+            statement = statement.where(PaymentOrder.status == str(status))
+        return list(session.scalars(statement))
+
+
+def get_payment_order(order_no):
+    with get_db_session() as session:
+        return session.scalar(
+            select(PaymentOrder)
+            .options(joinedload(PaymentOrder.user), joinedload(PaymentOrder.course))
+            .where(PaymentOrder.order_no == str(order_no))
+        )
+
+
 def activate_payment_order(order_no, operator_note=None, now=None):
     current = _as_utc(now or datetime.now(timezone.utc))
     normalized_operator_note = str(operator_note).strip() or None if operator_note is not None else None
@@ -150,6 +172,38 @@ def activate_payment_order(order_no, operator_note=None, now=None):
         order.paid_at = current
         session.flush()
         return entitlement
+
+
+def cancel_payment_order(order_no, operator_note=None):
+    normalized_operator_note = str(operator_note).strip() or None if operator_note is not None else None
+    with get_db_session() as session:
+        order = session.scalar(
+            select(PaymentOrder)
+            .where(PaymentOrder.order_no == str(order_no))
+            .with_for_update()
+        )
+        if order is None:
+            raise PaymentOrderNotFoundError("The payment order does not exist.")
+        if order.status == "cancelled":
+            return order
+        if order.status != "pending":
+            raise PaymentOrderStateError("Only pending payment orders can be cancelled.")
+
+        cancelled = session.execute(
+            update(PaymentOrder)
+            .where(PaymentOrder.id == order.id, PaymentOrder.status == "pending")
+            .values(status="cancelled", operator_note=normalized_operator_note)
+        )
+        if cancelled.rowcount != 1:
+            session.expire_all()
+            stored = session.get(PaymentOrder, order.id)
+            if stored is not None and stored.status == "cancelled":
+                return stored
+            raise PaymentOrderStateError("The payment order could not be cancelled.")
+        order.status = "cancelled"
+        order.operator_note = normalized_operator_note
+        session.flush()
+        return order
 
 
 def _require_order_entitlement(session, order):

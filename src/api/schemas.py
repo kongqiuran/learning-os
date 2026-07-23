@@ -127,6 +127,22 @@ class PaymentOrderResponse(BaseModel):
     operator_note: str | None
 
 
+class AdminPaymentOrderActionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    operator_note: str | None = Field(default=None, max_length=1000)
+
+
+class AdminPaymentOrderResponse(PaymentOrderResponse):
+    user_email: str
+    course_name: str
+    product_name: str
+
+
+class AdminPaymentOrderListResponse(BaseModel):
+    orders: list[AdminPaymentOrderResponse]
+
+
 class MessageResponse(BaseModel):
     message: str
 

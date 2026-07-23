@@ -1,6 +1,8 @@
 import type {
   ApiErrorPayload,
   AccountDeletionResponse,
+  AdminPaymentOrder,
+  AdminPaymentOrderListResponse,
   AssistantQueryInput,
   AssistantQueryResponse,
   AuthResponse,
@@ -60,6 +62,9 @@ const localizedMessages: Record<string, string> = {
   course_quota_exceeded: '本课程的 AI 整理次数已用完。',
   assistant_quota_exceeded: '本课程的 AI 助手次数已用完。',
   insufficient_credits: '当前 AI 使用额度不足。',
+  admin_access_required: '当前账号没有管理员权限。',
+  payment_order_not_found: '购买订单不存在。',
+  payment_order_state_invalid: '订单当前状态不允许执行此操作。',
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -167,6 +172,22 @@ export const api = {
     }),
   paymentOrder: (orderNo: string) =>
     request<PaymentOrder>(`/api/billing/orders/${encodeURIComponent(orderNo)}`),
+  adminPaymentOrders: (status?: string) => {
+    const query = status ? `?status=${encodeURIComponent(status)}` : ''
+    return request<AdminPaymentOrderListResponse>(`/api/admin/billing/orders${query}`)
+  },
+  adminPaymentOrder: (orderNo: string) =>
+    request<AdminPaymentOrder>(`/api/admin/billing/orders/${encodeURIComponent(orderNo)}`),
+  activateAdminPaymentOrder: (orderNo: string, operatorNote?: string) =>
+    request<AdminPaymentOrder>(`/api/admin/billing/orders/${encodeURIComponent(orderNo)}/activate`, {
+      method: 'POST',
+      body: JSON.stringify({ operator_note: operatorNote || null }),
+    }),
+  cancelAdminPaymentOrder: (orderNo: string, operatorNote?: string) =>
+    request<AdminPaymentOrder>(`/api/admin/billing/orders/${encodeURIComponent(orderNo)}/cancel`, {
+      method: 'POST',
+      body: JSON.stringify({ operator_note: operatorNote || null }),
+    }),
   dashboard: () => request<DashboardResponse>('/api/dashboard'),
   courses: () => request<CourseListResponse>('/api/courses'),
   course: (courseId: number | string) => request<CourseSummary>(`/api/courses/${courseId}`),

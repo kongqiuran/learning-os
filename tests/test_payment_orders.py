@@ -2,6 +2,7 @@ import unittest
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from datetime import datetime, timezone
+from os import environ
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
@@ -155,6 +156,89 @@ class PaymentOrderApiTest(unittest.TestCase):
         response = self.client.get(f"/api/billing/orders/{order.order_no}")
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json()["error"]["code"], "payment_order_not_found")
+
+
+class AdminPaymentOrderApiTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        create_database_tables()
+
+    def setUp(self):
+        with get_db_session() as session:
+            session.query(User).delete()
+        self.admin = register_user(f"admin-{id(self)}@example.com", "password")
+        self.buyer = register_user(f"buyer-{id(self)}@example.com", "password")
+        self.course = create_course(self.buyer.id, "Commercial Law")
+        self.app = create_app(session_secret="admin-payment-order-test-secret")
+        self.app.dependency_overrides[require_current_user] = lambda: self.admin
+        self.client = TestClient(self.app)
+
+    def tearDown(self):
+        self.client.close()
+
+    def _admin_request(self, method, path, **kwargs):
+        with patch.dict(environ, {"ADMIN_EMAILS": self.admin.email.upper()}):
+            return self.client.request(method, path, **kwargs)
+
+    def test_admin_lists_pending_order_with_user_and_course(self):
+        order = create_payment_order(self.buyer.id, self.course.id, "course_space", "admin-list")
+
+        response = self._admin_request("GET", "/api/admin/billing/orders?status=pending")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()["orders"]
+        self.assertEqual(len(payload), 1)
+        self.assertEqual(payload[0]["order_no"], order.order_no)
+        self.assertEqual(payload[0]["user_email"], self.buyer.email)
+        self.assertEqual(payload[0]["course_name"], self.course.name)
+
+    def test_admin_activation_is_idempotent_and_creates_entitlement(self):
+        order = create_payment_order(self.buyer.id, self.course.id, "course_space", "admin-activate")
+        path = f"/api/admin/billing/orders/{order.order_no}/activate"
+
+        first = self._admin_request("POST", path, json={"operator_note": "Payment received"})
+        second = self._admin_request("POST", path, json={"operator_note": "Repeated confirmation"})
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(first.json()["status"], "paid")
+        self.assertEqual(first.json()["entitlement_id"], second.json()["entitlement_id"])
+        self.assertIn(f"operator_id={self.admin.id}", first.json()["operator_note"])
+        with get_db_session() as session:
+            self.assertEqual(session.query(CourseEntitlement).filter_by(course_id=self.course.id).count(), 1)
+
+    def test_admin_can_cancel_pending_order(self):
+        order = create_payment_order(self.buyer.id, self.course.id, "course_space", "admin-cancel")
+
+        response = self._admin_request(
+            "POST",
+            f"/api/admin/billing/orders/{order.order_no}/cancel",
+            json={"operator_note": "Duplicate request"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], "cancelled")
+        self.assertIn(f"operator_id={self.admin.id}", response.json()["operator_note"])
+
+    def test_paid_order_cannot_be_cancelled(self):
+        order = create_payment_order(self.buyer.id, self.course.id, "course_space", "paid-cancel")
+        activate_payment_order(order.order_no)
+
+        response = self._admin_request(
+            "POST",
+            f"/api/admin/billing/orders/{order.order_no}/cancel",
+            json={"operator_note": None},
+        )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()["error"]["code"], "payment_order_state_invalid")
+
+    def test_non_admin_receives_403(self):
+        with patch.dict(environ, {"ADMIN_EMAILS": "someone-else@example.com"}):
+            response = self.client.get("/api/admin/billing/orders")
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["error"]["code"], "admin_access_required")
 
 
 if __name__ == "__main__":

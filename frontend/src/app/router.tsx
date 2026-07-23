@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router-dom'
 
+import { AdminBillingPage } from '../pages/AdminBillingPage'
 import { ProtectedRoute } from '../components/auth/ProtectedRoute'
 import { AppShell } from '../components/layout/AppShell'
 import { CourseSpacePage } from '../pages/CourseSpacePage'
@@ -35,6 +36,7 @@ export function AppRouter() {
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/pricing" element={<PricingPage />} />
             <Route path="/purchase/:orderNo" element={<PurchasePage />} />
+            <Route path="/admin/billing" element={<AdminBillingPage />} />
           </Route>
         </Route>
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
