@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
 from src.api.errors import register_error_handlers
-from src.api.routers import account, admin_billing, auth, billing, chapters, course_space, courses, health, knowledge, privacy
+from src.api.routers import account, admin_billing, auth, billing, chapters, course_space, courses, health, knowledge, privacy, visual_assets
 from src.logging_config import configure_logging, get_logger
 
 
@@ -97,6 +97,7 @@ def create_app(session_secret=None):
     app.include_router(chapters.router)
     app.include_router(course_space.router)
     app.include_router(knowledge.router)
+    app.include_router(visual_assets.router)
     return app
 
 

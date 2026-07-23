@@ -6,6 +6,7 @@ from src.api.schemas import (
     DocumentResponse,
     LearningPackageResponse,
     TaskResponse,
+    VisualAssetResponse,
     KnowledgeDetailResponse,
     KnowledgeSummaryResponse,
 )
@@ -88,6 +89,28 @@ def serialize_task(task):
         updated_at=task.updated_at,
         started_at=task.started_at,
         finished_at=task.finished_at,
+    )
+
+
+def serialize_visual_asset(asset):
+    return VisualAssetResponse(
+        id=asset.id,
+        target_type=asset.target_type,
+        target_id=asset.target_id,
+        type=asset.type,
+        generator=asset.generator,
+        content=asset.content,
+        url=asset.url,
+        status=asset.status,
+        target_snapshot=asset.target_snapshot or {},
+        source_hash=asset.source_hash,
+        metadata=asset.asset_metadata or {},
+        task_id=asset.task_id,
+        task=serialize_task(asset.task),
+        error_code=asset.error_code,
+        error_detail=asset.error_detail,
+        created_at=asset.created_at,
+        updated_at=asset.updated_at,
     )
 
 

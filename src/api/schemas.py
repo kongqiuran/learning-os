@@ -231,6 +231,39 @@ class TaskResponse(BaseModel):
     finished_at: datetime | None = None
 
 
+class VisualAssetResponse(BaseModel):
+    id: int
+    target_type: str
+    target_id: str
+    type: str
+    generator: str
+    content: str
+    url: str | None = None
+    status: str
+    target_snapshot: dict[str, Any]
+    source_hash: str
+    metadata: dict[str, Any]
+    task_id: int | None = None
+    task: TaskResponse | None = None
+    error_code: str | None = None
+    error_detail: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class VisualAssetListResponse(BaseModel):
+    target_type: str
+    target_id: str
+    items: list[VisualAssetResponse] = Field(default_factory=list)
+
+
+class VisualGenerationResponse(BaseModel):
+    recommended: bool
+    reason: str
+    confidence: float
+    asset: VisualAssetResponse | None = None
+
+
 class LearningPackageResponse(BaseModel):
     id: int
     status: str

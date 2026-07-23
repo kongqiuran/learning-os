@@ -157,6 +157,12 @@ def analyze_course(course_id, user_id, llm_client=None, language="zh", package_i
         package.current_stage = "completed"
         package.error_type = None
         package.error_detail = None
+        _enqueue_visual_generation(
+            user_id=user_id,
+            course_id=course.id,
+            document_ids=[document.id for document in documents],
+            task_id=package.task_id,
+        )
         return package
     except TenantIsolationError:
         raise
@@ -214,6 +220,42 @@ def analyze_course(course_id, user_id, llm_client=None, language="zh", package_i
             },
         )
         raise
+
+
+def _enqueue_visual_generation(user_id, course_id, document_ids, task_id=None):
+    try:
+        # Visual remains a downstream, optional layer. Its failure must never
+        # change knowledge generation, quota settlement, or package status.
+        from src.visual.service import VisualService
+
+        asset_ids = VisualService().enqueue_for_documents(
+            user_id=user_id,
+            course_id=course_id,
+            document_ids=document_ids,
+        )
+        logger.info(
+            "Automatic visual generation enqueued.",
+            extra={
+                "event": "visual.enqueue.success",
+                "user_id": user_id,
+                "task_id": task_id,
+                "document_id": None,
+                "course_id": course_id,
+                "visual_asset_ids": asset_ids,
+            },
+        )
+    except Exception as exc:
+        logger.exception(
+            "Automatic visual generation enqueue failed without affecting knowledge.",
+            extra={
+                "event": "visual.enqueue.failed",
+                "user_id": user_id,
+                "task_id": task_id,
+                "document_id": None,
+                "course_id": course_id,
+                "exception": exc,
+            },
+        )
 
 
 def get_learning_package(course_id, user_id):

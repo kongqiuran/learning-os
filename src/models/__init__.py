@@ -13,6 +13,7 @@ from src.models.privacy_consent import PrivacyConsent
 from src.models.usage_record import UsageRecord
 from src.models.user import User
 from src.models.user_plan import UserPlan
+from src.models.visual_asset import VisualAsset
 
 
 __all__ = [
@@ -31,4 +32,5 @@ __all__ = [
     "PrivacyConsent",
     "UsageRecord",
     "UserPlan",
+    "VisualAsset",
 ]

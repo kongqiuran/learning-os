@@ -9,12 +9,14 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select, update
 
 from src.database import create_database_tables, get_db_session
-from src.models import Course, LearningPackage
+from src.models import Course, LearningPackage, VisualAsset
 from src.services.analysis_service import analyze_course
 from src.config import DATA_DIR
 from src.ops import send_alert
 from src.services.quota_settlement_service import release_package_quota, settle_package_quota
 from src.services.task_service import sync_package_task
+from src.services.visual_task_service import sync_visual_task
+from src.visual.service import VisualService
 from src.logging_config import configure_logging, get_logger
 
 
@@ -58,6 +60,38 @@ def _recover_stale():
                         sync_package_task(session, task, course.user_id, status="PENDING", stage="recovered")
                 else:
                     _fail_and_refund(session, task, "worker_lost", "Worker heartbeat expired twice.")
+        visual_assets = list(
+            session.scalars(
+                select(VisualAsset).where(VisualAsset.status == "generating")
+            )
+        )
+        for asset in visual_assets:
+            heartbeat = asset.heartbeat_at or asset.claimed_at or asset.created_at
+            if heartbeat.tzinfo is None:
+                heartbeat = heartbeat.replace(tzinfo=timezone.utc)
+            if heartbeat < cutoff:
+                if asset.task_attempts < 2:
+                    asset.status = "pending"
+                    asset.claimed_at = None
+                    asset.heartbeat_at = None
+                    sync_visual_task(
+                        session,
+                        asset,
+                        status="PENDING",
+                        stage="queued",
+                    )
+                else:
+                    asset.status = "failed"
+                    asset.error_code = "worker_lost"
+                    asset.error_detail = "Worker heartbeat expired twice."
+                    sync_visual_task(
+                        session,
+                        asset,
+                        status="FAILED",
+                        stage="generating",
+                        error_code=asset.error_code,
+                        error_detail=asset.error_detail,
+                    )
 
 
 def _claim_next():
@@ -107,6 +141,125 @@ def _heartbeat(task_id):
             course = session.get(Course, task.course_id)
             if course is not None:
                 sync_package_task(session, task, course.user_id, status="RUNNING", stage=task.current_stage)
+
+
+def _claim_next_visual():
+    with get_db_session() as session:
+        asset_id = session.scalar(
+            select(VisualAsset.id)
+            .where(VisualAsset.status == "pending")
+            .order_by(VisualAsset.created_at, VisualAsset.id)
+            .limit(1)
+        )
+        if asset_id is None:
+            return None
+        claimed_at = datetime.now(timezone.utc)
+        claimed = session.execute(
+            update(VisualAsset)
+            .where(
+                VisualAsset.id == asset_id,
+                VisualAsset.status == "pending",
+            )
+            .values(
+                status="generating",
+                claimed_at=claimed_at,
+                heartbeat_at=claimed_at,
+                task_attempts=VisualAsset.task_attempts + 1,
+            )
+            .returning(
+                VisualAsset.id,
+                VisualAsset.user_id,
+                VisualAsset.course_id,
+                VisualAsset.document_id,
+                VisualAsset.task_id,
+            )
+        ).first()
+        if claimed is None:
+            return None
+        asset = session.get(VisualAsset, claimed.id)
+        if asset is None:
+            return None
+        sync_visual_task(
+            session,
+            asset,
+            status="RUNNING",
+            stage="planning",
+            progress=20,
+        )
+        return (
+            claimed.id,
+            claimed.user_id,
+            claimed.course_id,
+            claimed.document_id,
+            claimed.task_id,
+        )
+
+
+def _heartbeat_visual(asset_id):
+    while not stop_event.wait(15):
+        with get_db_session() as session:
+            asset = session.get(VisualAsset, asset_id)
+            if asset is None or asset.status != "generating":
+                return
+            asset.heartbeat_at = datetime.now(timezone.utc)
+            sync_visual_task(
+                session,
+                asset,
+                status="RUNNING",
+                stage="generating",
+                progress=55,
+            )
+
+
+def _process_claimed_visual(claimed):
+    asset_id, user_id, course_id, document_id, task_id = claimed
+    heartbeat = threading.Thread(
+        target=_heartbeat_visual,
+        args=(asset_id,),
+        daemon=True,
+    )
+    heartbeat.start()
+    try:
+        VisualService().process_asset(asset_id)
+    except Exception as exc:
+        logger.exception(
+            "Visual generation task failed.",
+            extra={
+                "event": "worker.visual.failed",
+                "user_id": user_id,
+                "task_id": task_id,
+                "document_id": document_id,
+                "course_id": course_id,
+                "visual_asset_id": asset_id,
+                "exception": exc,
+            },
+        )
+        with get_db_session() as session:
+            asset = session.get(VisualAsset, asset_id)
+            if asset is None:
+                return
+            if asset.task_attempts >= 2:
+                asset.status = "failed"
+                asset.error_code = type(exc).__name__[:120]
+                asset.error_detail = str(exc)[:4000]
+                sync_visual_task(
+                    session,
+                    asset,
+                    status="FAILED",
+                    stage="generating",
+                    error_code=asset.error_code,
+                    error_detail=asset.error_detail,
+                )
+            else:
+                asset.status = "pending"
+                asset.claimed_at = None
+                asset.heartbeat_at = None
+                sync_visual_task(
+                    session,
+                    asset,
+                    status="PENDING",
+                    stage="queued",
+                )
 
 
 def _fail_and_refund(session, task, error_type, detail):
@@ -192,6 +345,7 @@ def run():
     worker_heartbeat.start()
     concurrency = max(1, min(4, int(os.getenv("LEARNING_OS_WORKER_CONCURRENCY", "2"))))
     active = set()
+    prefer_visual = False
     last_recovery = time.monotonic()
     logger.info(
         "Worker started.",
@@ -206,11 +360,26 @@ def run():
             if len(active) >= concurrency:
                 stop_event.wait(0.5)
                 continue
-            claimed = _claim_next()
-            if claimed is None:
+            package_claimed = None
+            visual_claimed = None
+            if prefer_visual:
+                visual_claimed = _claim_next_visual()
+                if visual_claimed is None:
+                    package_claimed = _claim_next()
+            else:
+                package_claimed = _claim_next()
+                if package_claimed is None:
+                    visual_claimed = _claim_next_visual()
+            prefer_visual = not prefer_visual
+            if package_claimed is None and visual_claimed is None:
                 stop_event.wait(2)
                 continue
-            active.add(executor.submit(_process_claimed, claimed))
+            if visual_claimed is not None:
+                active.add(
+                    executor.submit(_process_claimed_visual, visual_claimed)
+                )
+            else:
+                active.add(executor.submit(_process_claimed, package_claimed))
 
 
 if __name__ == "__main__":
