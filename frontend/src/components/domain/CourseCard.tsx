@@ -1,3 +1,4 @@
+// 文件说明：课程卡片组件。CourseSummary 类型来自本项目 API 类型定义；lucide-react 提供图标；它展示单门课程并触发打开课程动作。
 import { ArrowRight, BookOpen, FileText } from 'lucide-react'
 
 import type { CourseSummary } from '../../types/api'

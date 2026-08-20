@@ -1,3 +1,4 @@
+// 文件说明：知识卡片组件。KnowledgeSummary 类型来自本项目 API 类型；它展示知识标题、来源、重要程度和是否已查看。
 import { ArrowRight, BookMarked, Eye, FileText, Star } from 'lucide-react'
 
 import type { KnowledgeSummary } from '../../types/api'

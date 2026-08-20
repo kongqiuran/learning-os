@@ -1,3 +1,4 @@
+// 文件说明：AI 课程助手组件。useState/useEffect 来自 React；useNavigate 来自 react-router-dom；图标来自 lucide-react；它把用户问题提交给后端课程助手接口。
 import { BookMarked, FileText, LoaderCircle, Send, Sparkles } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'

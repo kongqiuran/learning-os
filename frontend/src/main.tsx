@@ -1,3 +1,4 @@
+// 文件说明：React 前端启动入口。createRoot 来自 react-dom/client；StrictMode 来自 React；它把应用挂载到 index.html 的 root 节点。
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 

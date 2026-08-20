@@ -1,3 +1,4 @@
+// 文件说明：AI 任务状态工具。它把后端不同字段里的状态统一转换成 PENDING/RUNNING/SUCCESS/FAILED，方便页面判断。
 import type { LearningPackage } from '../types/api'
 
 export function taskStatus(item: LearningPackage | null | undefined) {

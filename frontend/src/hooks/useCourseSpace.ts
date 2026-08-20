@@ -1,3 +1,4 @@
+// 文件说明：课程空间相关 Hook。useQuery/useMutation/useQueryClient 来自 TanStack React Query，用来请求、提交和刷新课程空间数据。
 import { useEffect } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 

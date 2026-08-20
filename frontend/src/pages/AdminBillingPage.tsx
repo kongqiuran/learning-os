@@ -1,3 +1,4 @@
+// 文件说明：管理员订单页面。useQuery/useMutation 来自 TanStack React Query；管理员可筛选订单并手动激活或取消。
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CheckCircle2, LoaderCircle, RefreshCw, XCircle } from 'lucide-react'
 import { useState } from 'react'

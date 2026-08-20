@@ -1,3 +1,4 @@
+// 文件说明：首页课程列表页面。useNavigate/useSearchParams 来自 react-router-dom；它读取课程列表、最近课程，并打开创建课程弹窗。
 import { ArrowRight, Plus } from 'lucide-react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 

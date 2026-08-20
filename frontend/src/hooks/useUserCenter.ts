@@ -1,3 +1,4 @@
+// 文件说明：用户中心 Hook。它集中处理额度、商品、隐私政策、注销账号等用户中心接口。
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api } from '../lib/api'

@@ -1,3 +1,4 @@
+// 文件说明：法律文档页面。Link 来自 react-router-dom；MarkdownContent 用来把隐私政策和用户协议 Markdown 渲染成页面。
 import { ArrowLeft, BookOpen, ShieldCheck } from 'lucide-react'
 import { Link } from 'react-router-dom'
 

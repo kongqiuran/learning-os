@@ -1,3 +1,4 @@
+// 文件说明：顶部栏组件。Menu/Search 图标来自 lucide-react；它显示移动端菜单按钮、搜索占位和当前用户邮箱。
 import { Menu, Search } from 'lucide-react'
 
 interface TopbarProps {

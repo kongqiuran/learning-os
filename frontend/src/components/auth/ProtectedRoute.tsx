@@ -1,3 +1,4 @@
+// 文件说明：登录保护组件。Navigate、Outlet、useLocation 来自 react-router-dom；它先检查用户登录和隐私协议状态，再决定显示子页面还是跳转登录页。
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 
 import { usePrivacyConsentStatus } from '../../hooks/useUserCenter'

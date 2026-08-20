@@ -1,3 +1,4 @@
+// 文件说明：通用按钮组件。ButtonHTMLAttributes/ReactNode 来自 React 类型；它把按钮样式、变体和 HTML button 属性统一封装。
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
 
 type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'ai' | 'danger'

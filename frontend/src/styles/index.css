@@ -1,3 +1,7 @@
+/*
+  文件说明：全站样式入口。@import "tailwindcss" 来自 Tailwind CSS，
+  用来引入 Tailwind 的基础样式和工具类；下面的 CSS 规则补充 Markdown、滚动条等全局样式。
+*/
 @import "tailwindcss";
 
 @theme {

@@ -1,3 +1,4 @@
+// 文件说明：前端路由表。BrowserRouter、Routes、Route、Navigate、useParams 来自 react-router-dom，用来根据地址栏路径切换 React 页面。
 import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router-dom'
 
 import { AdminBillingPage } from '../pages/AdminBillingPage'

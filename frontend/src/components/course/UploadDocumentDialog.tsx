@@ -1,3 +1,4 @@
+// 文件说明：上传资料弹窗组件。useState/useEffect 来自 React；FormData 和文件选择 input 是浏览器能力；它负责选择文件、显示进度并调用上传接口。
 import { Upload, X } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 

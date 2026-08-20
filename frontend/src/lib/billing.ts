@@ -1,3 +1,4 @@
+// 文件说明：购买和额度工具函数。URLSearchParams 与 Intl.NumberFormat 是浏览器/JavaScript 标准能力，用于拼接链接和格式化金额。
 import { ApiError } from './api'
 
 const CREDIT_ERROR_CODES = new Set([

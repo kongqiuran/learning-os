@@ -1,3 +1,4 @@
+// 文件说明：套餐购买页面。useRef/useMemo/useEffect/useState 来自 React；它根据课程和商品创建购买订单。
 import { useMutation } from '@tanstack/react-query'
 import { Check, LoaderCircle, ShieldCheck } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'

@@ -1,3 +1,4 @@
+// 文件说明：前后端接口类型定义。interface/type 是 TypeScript 语法，用来约束 API 请求和响应字段，减少写错字段名。
 export interface User {
   id: number
   email: string

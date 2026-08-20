@@ -1,3 +1,4 @@
+// 文件说明：全站 Provider 配置。Provider 是 React 的上下文提供者写法；QueryClientProvider 来自 TanStack React Query，用来把接口缓存能力传给所有子组件。
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useState, type ReactNode } from 'react'
 

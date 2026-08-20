@@ -1,3 +1,4 @@
+// 文件说明：知识筛选组件。ReactNode 类型来自 React；它通过 onChange 回调把筛选条件传回父页面。
 import { Filter } from 'lucide-react'
 import type { ReactNode } from 'react'
 

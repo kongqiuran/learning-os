@@ -1,3 +1,4 @@
+// 文件说明：新课程引导组件。useState/useEffect 来自 React；localStorage 是浏览器内置存储，用来记住用户是否关闭过引导。
 import { Check, Circle, Sparkles, Upload, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 

@@ -1,3 +1,4 @@
+// 文件说明：进度条组件。Math.max/Math.min 是 JavaScript 内置数学函数，用来把进度限制在 0 到 100。
 interface ProgressBarProps {
   value: number
   label?: string

@@ -1,3 +1,4 @@
+// 文件说明：前端 API 请求层。fetch/XMLHttpRequest/FormData 是浏览器网络能力；ApiError 是本项目自定义错误类型。
 import type {
   ApiErrorPayload,
   AccountDeletionResponse,

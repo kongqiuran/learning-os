@@ -1,3 +1,4 @@
+// 文件说明：注册页面。useMutation 来自 TanStack React Query；提交邮箱、密码、确认密码和协议同意状态。
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ArrowRight } from 'lucide-react'
 import { useState, type FormEvent } from 'react'

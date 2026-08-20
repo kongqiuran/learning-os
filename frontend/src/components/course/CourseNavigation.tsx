@@ -1,3 +1,4 @@
+// 文件说明：旧版课程导航卡片。图标来自 lucide-react；LearningPackage 类型来自本项目 types/api，用于判断课程资料、AI 整理和知识入口状态。
 import { BookMarked, BookOpenText, FileText, LoaderCircle, Sparkles } from 'lucide-react'
 
 import type { LearningPackage } from '../../types/api'

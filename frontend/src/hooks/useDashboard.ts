@@ -1,3 +1,4 @@
+// 文件说明：首页/课程列表 Hook。useQuery/useMutation/useQueryClient 来自 TanStack React Query；它负责课程列表、创建课程和刷新缓存。
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api } from '../lib/api'

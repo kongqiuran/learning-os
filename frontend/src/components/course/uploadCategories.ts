@@ -1,3 +1,4 @@
+// 文件说明：上传资料分类配置。type/interface 是 TypeScript 语法，用来限制 documentType 只能是教材、课件、笔记等固定值。
 export type DocumentType = 'TEXTBOOK' | 'SLIDES' | 'NOTES' | 'EXAM' | 'HOMEWORK' | 'OTHER'
 
 export interface UploadCategory {

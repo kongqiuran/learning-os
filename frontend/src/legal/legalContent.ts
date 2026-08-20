@@ -1,3 +1,4 @@
+// 文件说明：法律文档内容配置。Record 是 TypeScript 工具类型，用来约束 privacy/terms 两种文档都必须存在。
 export const LEGAL_EFFECTIVE_DATE = '2026年7月1日'
 
 export type LegalDocumentKind = 'privacy' | 'terms'

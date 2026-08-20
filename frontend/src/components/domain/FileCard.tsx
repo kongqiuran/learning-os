@@ -1,3 +1,4 @@
+// 文件说明：资料文件卡片。useState 来自 React；DocumentSummary 类型来自本项目 API 类型；它根据文件处理状态展示不同图标和删除菜单。
 import { CircleAlert, CircleCheck, Clock3, FileText, LoaderCircle, MoreHorizontal, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 

@@ -1,3 +1,4 @@
+// 文件说明：用户设置页面。它展示账号、额度、权益、隐私协议和注销账号等信息，并调用相应接口。
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   BookOpen,

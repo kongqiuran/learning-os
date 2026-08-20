@@ -1,3 +1,4 @@
+// 文件说明：知识空间页面。useMemo/useState 来自 React；useMemo 用来缓存筛选结果，避免每次渲染都重复计算。
 import { ArrowLeft, BookMarked, Layers3 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'

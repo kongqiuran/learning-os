@@ -1,3 +1,4 @@
+// 文件说明：AI 整理结果展示组件。它把后端返回的 LearningPackage 按固定 section 顺序展示，并用 MarkdownContent 渲染 Markdown 文本。
 import { BookOpenText, CircleAlert, Sparkles } from 'lucide-react'
 
 import type { LearningPackage } from '../../types/api'

@@ -1,3 +1,4 @@
+// 文件说明：未登录产品演示页。Link 来自 react-router-dom；lucide-react 提供图标；这里只展示静态示例，不请求后端。
 import { ArrowRight, BookOpen, BookOpenText, CheckCircle2, FileText, GraduationCap, Layers3 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 

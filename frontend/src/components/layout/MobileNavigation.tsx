@@ -1,3 +1,4 @@
+// 文件说明：移动端导航抽屉。open 控制是否渲染；onClose 是父组件传入的关闭回调；X 图标来自 lucide-react。
 import { X } from 'lucide-react'
 
 import { Sidebar } from './Sidebar'

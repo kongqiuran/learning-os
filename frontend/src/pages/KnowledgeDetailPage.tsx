@@ -1,3 +1,4 @@
+// 文件说明：知识详情页面。useParams/useNavigate 来自 react-router-dom；它读取 URL 中的 courseId/knowledgeId 并请求知识详情。
 import { ArrowLeft } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
 

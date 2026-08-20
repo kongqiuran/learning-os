@@ -1,3 +1,4 @@
+// 文件说明：新用户欢迎引导。localStorage 是浏览器内置能力，用来记住用户是否关闭过欢迎提示。
 import { GraduationCap, Sparkles, Upload, X } from 'lucide-react'
 import { useState } from 'react'
 

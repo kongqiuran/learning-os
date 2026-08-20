@@ -1,3 +1,4 @@
+// 文件说明：课程资料列表组件。useState 来自 React；图标来自 lucide-react；它负责展示资料、打开上传弹窗、删除资料并刷新课程数据。
 import { BookOpen, ClipboardList, FileCheck2, FilePlus2, Files, NotebookPen, Presentation } from 'lucide-react'
 import { useState } from 'react'
 

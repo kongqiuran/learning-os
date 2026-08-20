@@ -1,3 +1,4 @@
+// 文件说明：通用卡片组件。HTMLAttributes/ReactNode 来自 React 类型；...props 是 JavaScript 展开语法，用来透传额外属性。
 import type { HTMLAttributes, ReactNode } from 'react'
 
 interface CardProps extends HTMLAttributes<HTMLElement> {

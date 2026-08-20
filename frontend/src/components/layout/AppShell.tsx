@@ -1,3 +1,4 @@
+// 文件说明：登录后应用外壳。Outlet 来自 react-router-dom，表示子页面渲染位置；它组合侧边栏、顶部栏和主体区域。
 import { useState } from 'react'
 import { Outlet } from 'react-router-dom'
 

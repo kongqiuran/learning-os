@@ -1,3 +1,4 @@
+// 文件说明：通用状态面板。ReactNode 来自 React 类型；它统一展示空状态、加载中和错误状态。
 import { AlertCircle, Inbox, LoaderCircle } from 'lucide-react'
 import type { ReactNode } from 'react'
 

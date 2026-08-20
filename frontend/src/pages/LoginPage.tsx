@@ -1,3 +1,4 @@
+// 文件说明：登录页面。useMutation 来自 TanStack React Query；useNavigate/useLocation 来自 react-router-dom；它提交邮箱密码并写入用户缓存。
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ArrowRight, BookOpen } from 'lucide-react'
 import { useState, type FormEvent, type ReactNode } from 'react'

@@ -1,3 +1,4 @@
+// 文件说明：隐私协议重新同意页面。Link 来自 react-router-dom；它在协议版本更新时要求用户重新确认。
 import { FileText, ShieldCheck } from 'lucide-react'
 import { Link } from 'react-router-dom'
 

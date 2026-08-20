@@ -1,3 +1,4 @@
+// 文件说明：知识库 Hook。useQuery/useMutation/useQueryClient 来自 TanStack React Query；它负责知识列表、知识详情和标记已查看。
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api } from '../lib/api'

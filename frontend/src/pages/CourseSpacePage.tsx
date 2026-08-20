@@ -1,3 +1,4 @@
+// 文件说明：课程空间主页面。useParams/useNavigate/NavLink 来自 react-router-dom；useMutation 来自 TanStack React Query；它串起章节、资料、AI 整理和助手。
 import {
   ArrowDown,
   ArrowLeft,

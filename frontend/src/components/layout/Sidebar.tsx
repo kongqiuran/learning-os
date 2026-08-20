@@ -1,3 +1,4 @@
+// 文件说明：侧边栏导航。NavLink/useNavigate 来自 react-router-dom；NavLink 能根据当前路由自动判断菜单是否激活。
 import { BookOpen, CircleUserRound, CreditCard, FlaskConical, LayoutDashboard } from 'lucide-react'
 import { NavLink, useNavigate } from 'react-router-dom'
 

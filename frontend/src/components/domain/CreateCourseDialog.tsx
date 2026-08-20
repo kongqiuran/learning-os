@@ -1,3 +1,4 @@
+// 文件说明：创建课程弹窗。useState/useEffect 来自 React；FormEvent 是 React 的表单事件类型；它把课程名和描述提交给创建课程 Hook。
 import { X } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 

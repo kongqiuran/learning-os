@@ -1,3 +1,4 @@
+// 文件说明：知识详情展示组件。MarkdownContent 用 react-markdown 渲染文本；它把知识解释、要点、来源和掌握建议展示给用户。
 import { BookOpenCheck, CircleCheck, FileText, Lightbulb, Star, TriangleAlert } from 'lucide-react'
 
 import type { KnowledgeDetail as KnowledgeDetailData } from '../../types/api'

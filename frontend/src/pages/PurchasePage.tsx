@@ -1,3 +1,4 @@
+// 文件说明：订单支付说明页面。useQuery 来自 TanStack React Query；navigator.clipboard 是浏览器剪贴板能力；它轮询订单状态。
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { CheckCircle2, Clipboard, LoaderCircle, RefreshCw } from 'lucide-react'
 import { useState } from 'react'
