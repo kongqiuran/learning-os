@@ -1,3 +1,4 @@
+# 文件说明：课程基础接口。APIRouter/Depends/HTTPException/status 来自 FastAPI；这里负责首页课程摘要、建课、查课和删课。
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from src.api.dependencies import require_current_user
@@ -20,11 +21,13 @@ from src.services.course_service import (
 from src.services.document_service import list_documents_for_course
 
 
+# 课程接口的 prefix 是 /api，因为 dashboard、courses 都是产品基础入口。
 router = APIRouter(prefix="/api", tags=["courses"])
 
 
 @router.get("/dashboard", response_model=DashboardResponse)
 def get_dashboard(user=Depends(require_current_user)):
+    # dashboard 是登录后首页接口，返回课程数量、资料数量和课程卡片列表。
     courses = _list_course_summaries(user.id)
     return DashboardResponse(
         course_count=len(courses),
@@ -71,10 +74,12 @@ def delete_course(course_id: int, user=Depends(require_current_user)):
 
 
 def _list_course_summaries(user_id):
+    # 列表推导式是 Python 语法：对每门课程调用 _serialize_course，生成课程摘要数组。
     return [_serialize_course(course, user_id) for course in list_courses_for_user(user_id)]
 
 
 def _serialize_course(course, user_id, detail=False):
+    # 课程摘要会同时读取资料和最近学习包，用 serializer 计算 document_count 和 updated_at。
     documents = list_documents_for_course(user_id, course.id)
     learning_package = get_learning_package(course.id, user_id)
     serializer = serialize_course_detail if detail else serialize_course_summary

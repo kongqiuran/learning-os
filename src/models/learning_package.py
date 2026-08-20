@@ -1,3 +1,4 @@
+# 文件说明：LearningPackage 数据库模型。它既代表 AI 整理任务状态，也保存整理完成后的 content_json 学习包内容。
 from datetime import datetime
 
 from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Integer, JSON, String, Text
@@ -8,6 +9,8 @@ from src.models.user import utc_now
 
 
 class LearningPackage(Base):
+    # LearningPackage 是文档链路的核心任务表。
+    # API 创建 pending 记录；Worker 改成 processing；生成成功后把 content_json 写进去并改 completed。
     __tablename__ = "learning_packages"
     __table_args__ = (
         CheckConstraint(
@@ -19,11 +22,15 @@ class LearningPackage(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     course_id: Mapped[int] = mapped_column(ForeignKey("courses.id", ondelete="CASCADE"), index=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    # content_json 保存最终学习包内容，例如课程地图、章节总结、公式、考试策略等。
+    # current_stage 给前端展示当前进行到 document_analyzer/course_analyzer 等哪一步。
     content_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     current_stage: Mapped[str | None] = mapped_column(String(80), nullable=True)
     retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     scene: Mapped[str] = mapped_column(String(20), nullable=False, default="legacy", index=True)
+    # scope_* 字段记录本次任务的整理范围。
+    # textbook 用 scope_document_id，follow 用 scope_chapter_id 或 scope_unassigned，exam 通常是整门课 scope_key=course。
     scope_document_id: Mapped[int | None] = mapped_column(ForeignKey("documents.id", ondelete="SET NULL"), nullable=True)
     scope_chapter_id: Mapped[int | None] = mapped_column(ForeignKey("chapters.id", ondelete="SET NULL"), nullable=True, index=True)
     scope_unassigned: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

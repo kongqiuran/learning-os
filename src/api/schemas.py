@@ -1,3 +1,4 @@
+# 文件说明：API 请求/响应数据结构定义。BaseModel、Field、ConfigDict、field_validator 来自 Pydantic，用来校验前端传入的数据并规定后端返回给前端的字段形状。
 from datetime import datetime
 from typing import Any
 
@@ -181,6 +182,8 @@ class DashboardResponse(BaseModel):
 
 
 class DocumentResponse(BaseModel):
+    # DocumentResponse 是上传/课程空间返回给前端的资料结构。
+    # BaseModel 来自 Pydantic；字段类型会被 FastAPI 用来生成 OpenAPI 文档和响应校验。
     id: int
     name: str
     mime_type: str
@@ -218,6 +221,8 @@ class ChapterResponse(BaseModel):
 
 
 class TaskResponse(BaseModel):
+    # TaskResponse 是前端轮询任务进度时看到的统一形状。
+    # LearningPackageResponse 和 VisualAssetResponse 都可以嵌入这个 task 字段。
     id: int
     task_type: str
     status: str
@@ -265,6 +270,8 @@ class VisualGenerationResponse(BaseModel):
 
 
 class LearningPackageResponse(BaseModel):
+    # LearningPackageResponse 对应学习包任务和结果。
+    # content 是后端 content_json 序列化后的字段，scene/scope_* 用来告诉前端这是哪个场景和范围的整理结果。
     id: int
     status: str
     version: int
@@ -288,6 +295,8 @@ class LearningPackageResponse(BaseModel):
 
 
 class CourseSpaceResponse(BaseModel):
+    # CourseSpaceResponse 是 GET /space 的聚合响应。
+    # 它一次返回课程、资料、章节、场景包、章节包和教材包，前端就不用拆很多接口请求。
     course: CourseDetailResponse
     documents: list[DocumentResponse]
     learning_package: LearningPackageResponse | None

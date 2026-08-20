@@ -1,3 +1,4 @@
+# 文件说明：知识点派生适配器。知识点没有独立表，这里把 DocumentAnalysis.topics 展开成前端可用的 KnowledgeItem。
 import re
 from dataclasses import dataclass
 from datetime import datetime
@@ -10,6 +11,8 @@ from src.models import Course, Document, DocumentAnalysis, KnowledgeView
 from src.models.user import utc_now
 
 
+# re.compile 来自 Python 标准库 re，用来把字符串规则编译成正则表达式。
+# knowledge_id 形如 analysis-12-topic-0，正则会解析出 analysis_id=12、topic_index=0。
 # Current keys omit a version because DocumentAnalysis is immutable in the MVP.
 # The optional version segment is reserved for a future analysis_version rollout.
 KNOWLEDGE_KEY_PATTERN = re.compile(
@@ -19,6 +22,8 @@ KNOWLEDGE_KEY_PATTERN = re.compile(
 
 @dataclass(frozen=True)
 class ParsedKnowledgeKey:
+    # dataclass 来自 Python 标准库，适合表示“小数据对象”。
+    # frozen=True 表示解析后的 key 不允许被修改，避免后面误改导致查错知识点。
     analysis_id: int
     topic_index: int
     analysis_version: int | None = None
@@ -47,6 +52,8 @@ class KnowledgeItem:
 
 
 def list_course_knowledge(course, user_id):
+    # 列出课程知识点：不是查 knowledge 表，而是查这门课下所有 DocumentAnalysis，
+    # 再把每条 analysis.topics 逐个展开成 KnowledgeItem。
     with get_db_session() as session:
         statement = (
             select(Document, DocumentAnalysis)
@@ -84,6 +91,8 @@ def list_course_knowledge(course, user_id):
 
 
 def get_knowledge_item(knowledge_key, user_id):
+    # 详情页传入的 knowledge_key 是派生 ID，必须先 parse 成 analysis_id + topic_index。
+    # 如果格式不对或 topic_index 越界，就返回 None，让路由层返回 404。
     parsed_key = parse_knowledge_key(knowledge_key)
     if parsed_key is None or parsed_key.analysis_version is not None:
         return None
@@ -125,6 +134,7 @@ def get_knowledge_item(knowledge_key, user_id):
 
 
 def mark_knowledge_viewed(knowledge_key, user_id):
+    # 已读状态单独写 KnowledgeView，因为知识点是从 DocumentAnalysis 派生的，不能直接在 topics 数组里写用户状态。
     item = get_knowledge_item(knowledge_key, user_id)
     if item is None:
         return None
@@ -151,10 +161,12 @@ def mark_knowledge_viewed(knowledge_key, user_id):
 
 
 def create_knowledge_key(analysis_id, topic_index):
+    # f"...{变量}..." 是 Python f-string 写法，用来把分析 ID 和主题序号拼成稳定的前端 ID。
     return f"analysis-{int(analysis_id)}-topic-{int(topic_index)}"
 
 
 def parse_knowledge_key(knowledge_key):
+    # fullmatch 来自 Python 正则对象，要求整个字符串都符合规则；这比只匹配开头更安全。
     match = KNOWLEDGE_KEY_PATTERN.fullmatch(str(knowledge_key))
     if match is None:
         return None
@@ -167,6 +179,7 @@ def parse_knowledge_key(knowledge_key):
 
 
 def _map_topic(course, document, analysis, topic, topic_index, viewed_by_key):
+    # topic 可能是 LLM 返回的 dict，也可能是简单字符串；这里统一整理成 dict，方便后面取 name/importance 等字段。
     topic_data = dict(topic) if isinstance(topic, dict) else {"name": str(topic)}
     title = str(topic_data.get("name", "")).strip()
     if not title:

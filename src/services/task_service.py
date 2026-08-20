@@ -1,9 +1,12 @@
+# 文件说明：任务状态同步服务。Task 是前端轮询看到的统一任务模型；LearningPackage 的 pending/processing/completed/failed 会映射成 PENDING/RUNNING/SUCCESS/FAILED。
 from datetime import datetime, timezone
 
 from src.models import Task
 from src.logging_config import get_logger
 
 
+# LearningPackage 使用数据库内部状态，Task 使用前端通用状态。
+# 这个映射让前端不用理解每种资源的内部状态，只看 PENDING/RUNNING/SUCCESS/FAILED。
 PACKAGE_STATUS_TO_TASK_STATUS = {
     "pending": "PENDING",
     "processing": "RUNNING",
@@ -11,6 +14,8 @@ PACKAGE_STATUS_TO_TASK_STATUS = {
     "failed": "FAILED",
 }
 
+# STAGE_PROGRESS 把后端 current_stage 翻译成前端可展示的阶段名和进度百分比。
+# 例如 document_analyzer 对应 knowledge_generation 65%，前端轮询 Task 时就能显示进度条。
 STAGE_PROGRESS = {
     "pending": ("queued", 0),
     "recovered": ("queued", 0),
@@ -29,6 +34,8 @@ logger = get_logger(__name__)
 
 
 def create_package_task(session, user_id, course_id, scene):
+    # 创建 LearningPackage 时同步创建 Task。
+    # Task.resource_type/resource_id 会指向学习包，方便前端用统一任务模型查询进度。
     task = Task(
         user_id=int(user_id),
         course_id=int(course_id),
@@ -57,6 +64,8 @@ def create_package_task(session, user_id, course_id, scene):
 
 
 def sync_package_task(
+    # sync 是 synchronize 的缩写，意思是“同步”。
+    # 每次学习包状态或阶段变化时，都调用这个函数把 Task 表更新到同样的进度。
     session,
     package,
     user_id,

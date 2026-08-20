@@ -1,3 +1,4 @@
+# 文件说明：数据库模型到 API 响应模型的转换层。serializer 是“序列化器”，作用是把 SQLAlchemy 对象整理成 Pydantic response_model 能返回给前端的结构。
 from src.api.schemas import (
     CourseDetailResponse,
     CourseSpaceResponse,
@@ -13,6 +14,8 @@ from src.api.schemas import (
 
 
 def serialize_course_summary(course, documents, learning_package=None):
+    # 课程卡片需要一个 updated_at。
+    # 这里用课程创建时间、资料上传时间、学习包创建时间里最新的一个，表示这门课最近有过活动。
     timestamps = [course.created_at]
     timestamps.extend(document.uploaded_at for document in documents)
     if learning_package is not None:
@@ -34,6 +37,8 @@ def serialize_course_detail(course, documents, learning_package=None):
 
 
 def serialize_document(document):
+    # 把 SQLAlchemy 的 Document 模型转换成前端 DocumentResponse。
+    # 前端看到的 status 来自 processing_status，同一字段在旧代码里也叫 status。
     return DocumentResponse(
         id=document.id,
         name=document.original_filename,
@@ -47,6 +52,8 @@ def serialize_document(document):
 
 
 def serialize_learning_package(package):
+    # 把 LearningPackage 数据库对象转换成 API 响应。
+    # content_json 在响应里叫 content，更贴近前端展示语义。
     if package is None:
         return None
     content = package.content_json if isinstance(package.content_json, dict) else {}
@@ -115,6 +122,8 @@ def serialize_visual_asset(asset):
 
 
 def serialize_course_space(course, documents, learning_package, chapters=None, scene_packages=None, chapter_packages=None, document_packages=None, scene_completed_packages=None, chapter_completed_packages=None, document_completed_packages=None):
+    # 组装 GET /space 的完整响应。
+    # 这里把不同来源的包分别放进 scene_packages/chapter_packages/document_packages，前端据此判断当前范围的整理状态。
     return CourseSpaceResponse(
         course=serialize_course_detail(course, documents, learning_package),
         documents=[serialize_document(document) for document in documents],
