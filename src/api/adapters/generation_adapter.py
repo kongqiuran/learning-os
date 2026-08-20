@@ -1,3 +1,5 @@
+# 文件说明：生成任务适配器，连接 API 层和 analysis_service。
+# datetime/timedelta/timezone/Lock 来自 Python 标准库；Lock 用来做 API 进程内的短暂防重复提交保护。
 from datetime import datetime, timedelta, timezone
 from threading import Lock
 
@@ -9,6 +11,8 @@ class GenerationInProgressError(RuntimeError):
     pass
 
 
+# _active_scope_keys 只保护“同一个 API 进程里的瞬时并发请求”。
+# 生产环境 Worker 是另一个进程，所以真正跨进程防重复要靠数据库里的 pending/processing LearningPackage。
 _registry_lock = Lock()
 _active_scope_keys = set()
 _RECENT_PROCESSING_WINDOW = timedelta(minutes=30)
@@ -29,6 +33,8 @@ def generate_course_package(course_id, user_id):
 
 
 def queue_course_package(course_id, user_id, scene="legacy", scope_document_id=None, scope_chapter_id=None, scope_unassigned=False, usage_record_id=None, entitlement_id=None, quota_source=None):
+    # API 点击“整理”时会走这里。
+    # 它只创建 LearningPackage(status=pending) 任务，不解析文件；后续由 worker.py 领取执行。
     """Persist a task while holding only a request-local duplicate guard.
 
     The worker runs in a separate process, so retaining this in-memory lock after
@@ -36,6 +42,8 @@ def queue_course_package(course_id, user_id, scene="legacy", scope_document_id=N
     process. Persisted pending/processing packages are the cross-process guard.
     """
     _, scope_key = get_scope_metadata(scope_document_id, scope_chapter_id, scope_unassigned)
+    # registry_key 用 course_id + scene + scope_key 表示“同一个整理范围”。
+    # 例如同一门课同一章节的 follow 整理不能重复排队。
     registry_key = (int(course_id), scene, scope_key)
     if not _claim_scope(registry_key):
         raise GenerationInProgressError("This content is already being generated.")
@@ -57,6 +65,7 @@ def queue_course_package(course_id, user_id, scene="legacy", scope_document_id=N
 
 
 def run_queued_course_package(package_id, course_id, user_id, scene=None, scope_document_id=None, scope_chapter_id=None, scope_unassigned=False):
+    # 测试环境的 BackgroundTasks 会调用这里；生产环境 worker.py 直接调用 analyze_course。
     _, scope_key = get_scope_metadata(scope_document_id, scope_chapter_id, scope_unassigned)
     registry_key = (int(course_id), scene or "legacy", scope_key)
     try:

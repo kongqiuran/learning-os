@@ -1,3 +1,6 @@
+# 文件说明：后台 Worker 进程。
+# 根据 docs/文档交互与接口链路.md，API 只写 pending 任务；这个文件负责领取任务、解析文档、调用 AI、结算/返还额度和处理配图任务。
+# threading、signal、time、ThreadPoolExecutor、Path、datetime 都来自 Python 标准库。
 import os
 import signal
 import threading
@@ -22,6 +25,8 @@ from src.logging_config import configure_logging, get_logger
 
 configure_logging()
 logger = get_logger("learning_os.worker")
+# threading.Event 是 Python 标准库里的线程同步工具。
+# stop_event 被设置后，各个循环会自然退出，避免强行杀进程导致任务状态来不及保存。
 stop_event = threading.Event()
 
 
@@ -30,6 +35,8 @@ def _stop(*_args):
 
 
 def _worker_heartbeat():
+    # Worker 进程级心跳：每 15 秒 touch 一个文件。
+    # touch 是 pathlib.Path 的方法，作用是创建文件或更新修改时间，运维探针可据此判断 Worker 是否活着。
     heartbeat_path = Path(DATA_DIR) / "database" / "worker-heartbeat"
     heartbeat_path.parent.mkdir(parents=True, exist_ok=True)
     while not stop_event.is_set():
@@ -38,6 +45,8 @@ def _worker_heartbeat():
 
 
 def _recover_stale():
+    # 恢复“卡住”的任务。
+    # 如果 processing 任务 90 秒没有 heartbeat，说明 Worker 可能崩溃；未满两轮就打回 pending，满两轮就失败并返还额度。
     cutoff = datetime.now(timezone.utc) - timedelta(seconds=90)
     with get_db_session() as session:
         completed_reservations = list(session.scalars(select(LearningPackage.id).where(LearningPackage.status == "completed", LearningPackage.quota_state == "reserved")))
@@ -95,6 +104,8 @@ def _recover_stale():
 
 
 def _claim_next():
+    # 领取最早的 LearningPackage(status=pending)。
+    # update(...).where(status == "pending") 是并发保护：多个 Worker 同时抢任务时，只有一个能把 pending 改成 processing。
     with get_db_session() as session:
         task_id = session.scalar(select(LearningPackage.id).where(LearningPackage.status == "pending").order_by(LearningPackage.created_at, LearningPackage.id).limit(1))
         if task_id is None:
@@ -132,6 +143,8 @@ def _claim_next():
 
 
 def _heartbeat(task_id):
+    # 单个学习包任务的心跳。
+    # Worker 正在调用 AI 时可能耗时较长，所以用独立线程持续写 heartbeat_at，避免任务被误判为丢失。
     while not stop_event.wait(15):
         with get_db_session() as session:
             task = session.get(LearningPackage, task_id)
@@ -274,10 +287,13 @@ def _fail_and_refund(session, task, error_type, detail):
 
 
 def _process_claimed(claimed):
+    # claimed 是 _claim_next 返回的任务信息元组。
+    # 这里开始执行真正的文档解析和学习包生成，核心调用是 analysis_service.analyze_course。
     package_id, course_id, user_id, scene, scope_document_id, scope_chapter_id, scope_unassigned, task_id = claimed
     task_heartbeat = threading.Thread(target=_heartbeat, args=(package_id,), daemon=True)
     task_heartbeat.start()
     try:
+        # analyze_course 会按 scene/scope 圈资料，生成或复用 DocumentAnalysis，再写入 LearningPackage.content_json。
         analyze_course(course_id, user_id, package_id=package_id, scene=None if scene == "legacy" else scene, scope_document_id=scope_document_id, scope_chapter_id=scope_chapter_id, scope_unassigned=scope_unassigned)
     except Exception as exc:
         logger.exception(
@@ -339,6 +355,7 @@ def _process_claimed(claimed):
 
 
 def run():
+    # Worker 主循环：建表 -> 恢复卡住任务 -> 启动进程心跳 -> 用线程池并发处理学习包/配图任务。
     create_database_tables()
     _recover_stale()
     worker_heartbeat = threading.Thread(target=_worker_heartbeat, daemon=True)
@@ -351,6 +368,8 @@ def run():
         "Worker started.",
         extra={"event": "worker.started", "status": "RUNNING"},
     )
+    # ThreadPoolExecutor 来自 Python 标准库 concurrent.futures。
+    # 它让 Worker 在一个进程内并发跑多个任务；默认并发数由 LEARNING_OS_WORKER_CONCURRENCY 控制。
     with ThreadPoolExecutor(max_workers=concurrency, thread_name_prefix="generation") as executor:
         while not stop_event.is_set():
             if time.monotonic() - last_recovery >= 30:

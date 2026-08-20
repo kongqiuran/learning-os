@@ -1,3 +1,5 @@
+# 文件说明：课程助手上下文构建和 LLM 问答适配器。
+# json/dataclass 来自 Python 标准库；select 来自 SQLAlchemy；LLMClient 是本项目的模型调用封装。
 import json
 from dataclasses import dataclass
 
@@ -26,11 +28,15 @@ SECTION_LABELS = {
 
 @dataclass(frozen=True)
 class AssistantAnswer:
+    # dataclass 是 Python 标准库功能，用来少写 __init__ 等样板代码。
+    # frozen=True 表示对象创建后不可修改，避免后续流程误改回答内容。
     answer: str
     source_files: list[str]
 
 
 def answer_course_question(course_id, user_id, question, current_section=None, llm_client=None, scene=None, chapter_id=None, textbook_id=None, scope_unassigned=False):
+    # 课程助手不重新解析文件，它只读取已经完成的 LearningPackage 和 DocumentAnalysis 作为上下文。
+    # 这对应文档里的“助手上下文优先级：当前范围学习包章节 -> 同范围 DocumentAnalysis”。
     context, source_files = _build_context(course_id, user_id, current_section, scene, chapter_id, textbook_id, scope_unassigned)
     if not context:
         return AssistantAnswer(INSUFFICIENT_CONTEXT_ANSWER, [])
@@ -64,12 +70,15 @@ def answer_course_question(course_id, user_id, question, current_section=None, l
 
 
 def _build_context(course_id, user_id, current_section, scene=None, chapter_id=None, textbook_id=None, scope_unassigned=False):
+    # 构建发给 LLM 的上下文，并控制最大长度。
+    # get_assistant_max_context_chars 来自配置模块，避免把过长内容一次性塞给模型导致成本过高或超出上下文窗口。
     limit = get_assistant_max_context_chars()
     parts = []
     source_files = []
     remaining = limit
 
     chapter_packages, document_packages = get_scoped_packages(course_id, user_id)
+    # 先选“最贴近当前场景/范围”的学习包：follow 看章节包，textbook 看单教材包，其它看整场景/旧整课包。
     if scene == "follow" and (chapter_id is not None or scope_unassigned):
         package = chapter_packages.get("unassigned" if scope_unassigned else str(chapter_id))
     elif scene == "textbook" and textbook_id is not None:
@@ -83,6 +92,7 @@ def _build_context(course_id, user_id, current_section, scene=None, chapter_id=N
                 break
 
     if remaining > 0:
+        # 如果学习包内容不够或没有完成学习包，再补充同范围的 DocumentAnalysis。
         for document, analysis in _load_document_analyses(course_id, user_id, scene, chapter_id, textbook_id, scope_unassigned):
             analysis_text = _to_text(
                 {
@@ -114,6 +124,8 @@ def _ordered_package_sections(content, current_section):
 
 
 def _load_document_analyses(course_id, user_id, scene=None, chapter_id=None, textbook_id=None, scope_unassigned=False):
+    # 知识分析来源于 DocumentAnalysis 表。
+    # 查询时同时过滤 course_id、Document.user_id、Course.user_id，保证助手不会读到别的用户资料。
     with get_db_session() as session:
         statement = (
             select(Document, DocumentAnalysis)
@@ -138,6 +150,8 @@ def _load_document_analyses(course_id, user_id, scene=None, chapter_id=None, tex
 
 
 def _append_bounded(parts, text, remaining):
+    # bounded 是“有边界”的意思：这里只追加 remaining 长度内的文本。
+    # 这样可以按顺序塞上下文，同时不会超过助手最大上下文字符数。
     normalized = text.strip()
     if not normalized or remaining <= 0:
         return remaining

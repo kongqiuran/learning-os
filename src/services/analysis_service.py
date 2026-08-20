@@ -1,3 +1,6 @@
+# 文件说明：文档解析与学习包生成的核心服务。
+# 这里是 docs/文档交互与接口链路.md 中 Worker 领取任务后的主流程：圈定资料 -> 解析/复用 DocumentAnalysis -> 生成 LearningPackage -> 排队配图。
+# datetime/hashlib 来自 Python 标准库；select/func 来自 SQLAlchemy，用来构造数据库查询。
 from datetime import datetime, timezone
 import hashlib
 from sqlalchemy import func, select
@@ -22,8 +25,12 @@ from src.logging_config import get_logger
 
 class TenantIsolationError(ValueError):
     """Raised when a background task's resource ownership tuple is invalid."""
+    # Tenant isolation 是“租户隔离/用户隔离”的意思。
+    # 后台 Worker 没有浏览器 session，所以每次读课程、资料、学习包都必须同时校验 course_id + user_id，避免串用户数据。
 
 
+# SCENE_TYPES 定义“每个学习场景允许圈哪些资料类型”。
+# 这和 docs/文档交互与接口链路.md 的 2.3 表格一致：跟课看课件/作业/笔记，教材只看教材，考试看试卷/作业。
 SCENE_TYPES = {
     "follow": {"SLIDES", "HOMEWORK", "OTHER", "NOTES"},
     "textbook": {"TEXTBOOK"},
@@ -34,6 +41,8 @@ logger = get_logger(__name__)
 
 
 def get_scope_metadata(scope_document_id=None, scope_chapter_id=None, scope_unassigned=False):
+    # scope 是“本次整理的范围”。
+    # 返回的 scope_kind/scope_key 会写进 LearningPackage，用来区分同一门课下不同章节、不同教材的整理任务。
     if scope_document_id is not None:
         return "document", f"document:{int(scope_document_id)}"
     if scope_chapter_id is not None:
@@ -44,6 +53,8 @@ def get_scope_metadata(scope_document_id=None, scope_chapter_id=None, scope_unas
 
 
 def validate_generation_scope(scene, scope_document_id=None, scope_chapter_id=None, scope_unassigned=False):
+    # sum((布尔值...)) 是 Python 写法：True 会当作 1，False 当作 0。
+    # 这里统计用户是否同时传了多个范围；一个任务不能既按文档又按章节整理。
     selected = sum((scope_document_id is not None, scope_chapter_id is not None, bool(scope_unassigned)))
     if selected > 1:
         raise ValueError("Choose exactly one generation scope.")
@@ -56,11 +67,14 @@ def validate_generation_scope(scene, scope_document_id=None, scope_chapter_id=No
 
 
 def analyze_course(course_id, user_id, llm_client=None, language="zh", package_id=None, scene=None, scope_document_id=None, scope_chapter_id=None, scope_unassigned=False):
+    # analyze_course 是 Worker 真正执行 AI 整理的入口。
+    # API 只会创建 pending 任务；Worker 调到这里后，才开始解析 PDF/PPTX/TXT/MD 和调用 LLM。
     course, documents = _load_course_documents(course_id, user_id, scene, scope_document_id, scope_chapter_id, scope_unassigned)
     if course is None:
         raise ValueError("The course does not exist or access is denied.")
     if not documents:
         raise ValueError("Upload at least one supported document before generating a learning package.")
+    # 防御性校验：即使查询条件写错，也不能让别的课程资料混进当前任务。
     _validate_document_course_binding(course_id, documents)
 
     package = (
@@ -69,6 +83,8 @@ def analyze_course(course_id, user_id, llm_client=None, language="zh", package_i
         else _create_package(course.id, user_id, "processing", scene or "legacy", scope_document_id, scope_chapter_id, scope_unassigned, documents)
     )
     try:
+        # LLMClient 是本项目的模型客户端封装，底层用 OpenAI-compatible Chat Completions 协议连接 DeepSeek 等模型。
+        # progress_callback 让 LLM 调用过程中可以回写 current_stage/progress，前端轮询时就能看到进度。
         client = llm_client or LLMClient(
             progress_callback=lambda **progress: _update_package_progress(
                 package.id,
@@ -95,6 +111,8 @@ def analyze_course(course_id, user_id, llm_client=None, language="zh", package_i
             scene=scene or "legacy",
         )
         analyses = []
+        # documents 是本次场景圈定出来的资料列表。
+        # 每份资料都会得到一个 DocumentAnalysis；如果已有缓存且流水线版本没变，就直接复用。
         for document in documents:
             _set_llm_log_context(client, document_id=document.id)
             _update_package_progress(
@@ -117,6 +135,7 @@ def analyze_course(course_id, user_id, llm_client=None, language="zh", package_i
             )
         _set_llm_log_context(client, document_id=None)
         if scene == "follow" and (scope_chapter_id is not None or scope_unassigned):
+            # 跟课场景按章节/未分章整理，直接用 follow_chapter_generator 合成章节学习包。
             _update_package_progress(package.id, course.id, user_id, "follow_chapter_generator", 0)
             content = generate_follow_chapter_package(analyses, llm_client=client, language=language)
         else:
@@ -377,6 +396,8 @@ def _validate_document_course_binding(course_id, documents):
 
 
 def _load_course_documents(course_id, user_id, scene=None, scope_document_id=None, scope_chapter_id=None, scope_unassigned=False):
+    # 这个函数负责“按场景和范围圈资料”。
+    # SQLAlchemy 的 select/join/where 是 Python ORM 查询写法，最终会变成 SQL 发给 SQLite。
     if course_id is None or user_id is None:
         return None, []
     with get_db_session() as session:
@@ -406,6 +427,8 @@ def _load_course_documents(course_id, user_id, scene=None, scope_document_id=Non
 
 
 def _create_package(course_id, user_id, status, scene="legacy", scope_document_id=None, scope_chapter_id=None, scope_unassigned=False, documents=None, usage_record_id=None, entitlement_id=None, quota_source=None):
+    # LearningPackage 是“学习包任务 + 结果”的数据库模型。
+    # pending 表示排队中，processing 表示 Worker 正在跑，completed/failed 表示最终结果。
     scope_kind, scope_key = get_scope_metadata(scope_document_id, scope_chapter_id, scope_unassigned)
     with get_db_session() as session:
         _require_scoped_course(session, course_id, user_id)
@@ -448,6 +471,8 @@ def _create_package(course_id, user_id, status, scene="legacy", scope_document_i
 
 
 def _source_fingerprint(documents):
+    # source_fingerprint 是来源指纹。
+    # hashlib.sha256 来自 Python 标准库，用资料 id、类型、章节、大小算出哈希；资料变了，旧学习包就会被标记 is_stale。
     payload = "|".join(
         f"{item.id}:{item.document_type}:{getattr(item, 'chapter_id', None)}:{item.file_size}"
         for item in sorted(documents, key=lambda value: value.id)
@@ -580,6 +605,8 @@ def _get_or_create_document_analysis(
     package_id=None,
     task_id=None,
 ):
+    # 单文档理解入口：一份 Document 最终对应一份 DocumentAnalysis。
+    # get_source_type 来自 file_parser_service，用后缀/MIME 判断 PDF、PPTX、TXT 或 MD。
     source_type = get_source_type(document.file_path, document.mime_type)
     vision_config = get_vision_config()
     document_intelligence_enabled = (
@@ -613,6 +640,7 @@ def _get_or_create_document_analysis(
             and existing_pipeline_version != DOCUMENT_INTELLIGENCE_PIPELINE_VERSION
         )
         if existing is not None and not should_refresh:
+            # 缓存命中：已有 DocumentAnalysis 且文档智能流水线版本没有升级，就不重复解析、不重复调用 LLM。
             stored_document.processing_status = "completed"
             logger.info(
                 "Document analysis cache hit.",
@@ -641,6 +669,8 @@ def _get_or_create_document_analysis(
             },
         )
         if document_intelligence_enabled:
+            # understand_pdf 来自 src.ai.document.pipeline，是 PDF 文档智能流水线：分页、判断是否需要视觉、可选视觉理解。
+            # 只有 PDF 且视觉配置开启时才走这条路；其它格式走下面的纯文本 extract_text。
             understanding = understand_pdf(
                 document,
                 user_id=user_id,
@@ -681,6 +711,7 @@ def _get_or_create_document_analysis(
             )
             result["_vision_degraded"] = understanding.degraded
         else:
+            # extract_text 来自 file_parser_service：PDF 用 PyMuPDF，PPTX 用 python-pptx，TXT/MD 直接读文本。
             text = extract_text(document.file_path, document.mime_type)
             result = analyze_document(
                 document.document_type,

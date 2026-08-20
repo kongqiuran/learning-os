@@ -1,3 +1,5 @@
+# 文件说明：资料上传、列表和删除服务。
+# Path 来自 Python 标准库 pathlib，用来安全处理文件名/扩展名；select/delete 来自 SQLAlchemy，用来查询和删除数据库记录。
 from pathlib import Path
 
 from sqlalchemy import delete, select
@@ -13,6 +15,8 @@ from src.storage import (
 from src.logging_config import get_logger
 
 
+# ALLOWED_FILE_TYPES 是上传白名单。
+# key 是文件扩展名，value 是允许的 MIME 类型；MIME 是浏览器/系统告诉后端的文件媒体类型。
 ALLOWED_FILE_TYPES = {
     ".pdf": {"application/pdf"},
     ".pptx": {
@@ -30,6 +34,8 @@ class DocumentUploadError(ValueError):
 
 
 def save_uploaded_document(user_id, course_id, uploaded_file, document_type="OTHER"):
+    # 上传阶段只做四件事：校验课程归属、校验文件、保存原文件、写 Document 记录。
+    # 根据文档链路，DocumentAnalysis 不会在这里创建，AI 解析要等用户点击“整理”后由 Worker 执行。
     if user_id is None or course_id is None:
         raise DocumentUploadError("A user and course are required.")
     if not _course_belongs_to_user(course_id, user_id):
@@ -53,6 +59,8 @@ def save_uploaded_document(user_id, course_id, uploaded_file, document_type="OTH
 
         _validate_file_signature(extension, data)
         file_path, stored_filename = save_document_bytes(user_id, course_id, extension, data)
+        # Document 是数据库模型，记录文件元数据和 processing_status。
+        # processing_status="uploaded" 表示文件已入库但尚未解析。
         document = Document(
             user_id=int(user_id),
             course_id=int(course_id),
@@ -115,6 +123,8 @@ def list_documents_for_course(user_id, course_id):
 
 
 def delete_document_for_user(document_id, user_id, course_id):
+    # 删除资料时先删数据库记录，再删原文件和派生文件。
+    # DocumentAnalysis 与 Document 有级联关系时，知识点也会随分析记录消失，因为知识点没有独立表。
     if document_id is None or user_id is None or course_id is None:
         return False
 
@@ -159,6 +169,8 @@ def _course_belongs_to_user(course_id, user_id):
 
 
 def _validate_file_type(extension, mime_type):
+    # 第一层校验：扩展名 + MIME 类型。
+    # 这能挡住大多数错误上传；后面 _validate_file_signature 还会看文件头，避免只改后缀绕过。
     if extension not in ALLOWED_FILE_TYPES:
         raise DocumentUploadError("Supported file types are PDF, PPTX, TXT, and MD.")
     if mime_type not in ALLOWED_FILE_TYPES[extension]:
@@ -166,6 +178,8 @@ def _validate_file_type(extension, mime_type):
 
 
 def _validate_file_signature(extension, data):
+    # 第二层校验：文件头签名。
+    # b"%PDF-" 和 b"PK" 是 bytes 字节串写法，来自 Python 语言本身；PDF 文件通常以 %PDF- 开头，PPTX 本质是 ZIP 包所以以 PK 开头。
     if extension == ".pdf" and not data.startswith(b"%PDF-"):
         raise DocumentUploadError("The file does not contain a valid PDF signature.")
     if extension == ".pptx" and not data.startswith(b"PK"):
