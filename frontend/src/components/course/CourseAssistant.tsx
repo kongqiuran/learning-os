@@ -9,14 +9,23 @@ import { Button } from '../ui/Button'
 import { Card } from '../ui/Card'
 import { MarkdownContent } from '../ui/MarkdownContent'
 
+// CourseAssistant 是“AI 学习助手”组件。
+// 它负责显示提问框、把问题提交给后端、展示 AI 回答和来源文件。
 export function CourseAssistant({
+  // courseId 来自路由参数，用来告诉后端“用户正在问哪一门课”。
   courseId,
+  // courseName 只用于页面展示，让用户知道当前上下文是哪门课。
   courseName,
+  // currentSection 表示当前正在看的内容范围，会一起发给后端帮助限定回答范围。
   currentSection,
+  // scene 表示学习场景，例如 follow/textbook/exam。
   scene,
+  // chapterId / textbookId 用于把问题限定到某个章节或某本教材。
   chapterId,
   textbookId,
+  // scopeUnassigned 表示是否限定在“未分章节资料”。默认 false。
   scopeUnassigned = false,
+  // initialQuestion 是外部传入的预填问题，比如用户点击某个知识点后自动生成问题开头。
   initialQuestion = '',
 }: {
   courseId: string | undefined
@@ -28,22 +37,37 @@ export function CourseAssistant({
   scopeUnassigned?: boolean
   initialQuestion?: string
 }) {
+  // question 保存输入框里正在编辑的问题。
+  // setQuestion 是修改 question 的函数；React 状态变化后会自动重新渲染界面。
   const [question, setQuestion] = useState('')
+  // submittedQuestion 保存“已经提交出去的那个问题”。
+  // 这样用户提交后继续编辑输入框时，回答区域仍能显示当时的问题。
   const [submittedQuestion, setSubmittedQuestion] = useState('')
+  // useCourseAssistant 封装了调用 /api/courses/:courseId/assistant/query 的逻辑。
+  // assistant 里面会有 mutate、isPending、data、error 等状态。
   const assistant = useCourseAssistant(courseId)
+  // navigate 用来在代码里跳转页面，例如额度不足时跳到购买页。
   const navigate = useNavigate()
+  // asCreditError 会判断当前错误是不是“额度不足”类型，方便展示购买入口。
   const creditError = asCreditError(assistant.error)
+  // ?. 是可选链：assistant.data 不存在时不会报错。
   const hasInsufficientContext = assistant.data?.answer === '当前课程资料中没有足够信息。'
 
   useEffect(() => {
+    // 当外部传入 initialQuestion 时，自动帮用户把输入框填成一个“解释这个内容”的问题。
     if (initialQuestion) setQuestion(`请结合“${initialQuestion}”解释：`)
   }, [initialQuestion])
 
   function handleSubmit(event: FormEvent) {
+    // 表单默认提交会刷新整个页面；preventDefault 阻止这个默认行为，交给 React 自己处理。
     event.preventDefault()
+    // trim 去掉前后空格，防止用户只输入空格也发请求。
     const normalizedQuestion = question.trim()
     if (!normalizedQuestion) return
     setSubmittedQuestion(normalizedQuestion)
+    // mutate 会真正触发接口请求。
+    // 这里对象里的字段名使用 current_section/chapter_id，是为了匹配后端 FastAPI 的请求字段。
+    // ?? 表示“左边是 null 或 undefined 时用右边”；这样没有章节/教材时就不传具体 id。
     assistant.mutate({ question: normalizedQuestion, current_section: currentSection || undefined, scene, chapter_id: chapterId ?? undefined, textbook_id: textbookId ?? undefined, scope_unassigned: scopeUnassigned })
   }
 
@@ -59,8 +83,13 @@ export function CourseAssistant({
         <ContextRow label="当前课程" value={courseName} icon={BookMarked} />
         <ContextRow label="当前内容" value={currentSection || '全部课程内容'} icon={FileText} />
 
+        {/* onSubmit 绑定上面的 handleSubmit，用户点击按钮或按回车提交时都会走同一套逻辑。 */}
         <form className="border-t border-slate-100 pt-4" onSubmit={handleSubmit}>
           <label className="text-sm font-semibold text-slate-800" htmlFor="course-assistant-question">你想理解什么？</label>
+          {/*
+            value={question} 表示这个输入框由 React 状态控制，显示内容永远等于 question。
+            onChange 会在用户输入时触发，把最新文字写回 question 状态。
+          */}
           <textarea
             id="course-assistant-question"
             className="mt-2 min-h-28 w-full resize-y rounded-xl border border-slate-200 px-3 py-2.5 text-sm leading-6 outline-none focus:border-violet-500 focus:ring-4 focus:ring-violet-100"

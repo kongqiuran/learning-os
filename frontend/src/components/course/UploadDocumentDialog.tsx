@@ -6,13 +6,22 @@ import { ApiError, type UploadProgress } from '../../lib/api'
 import { Button } from '../ui/Button'
 import { UPLOAD_CATEGORIES, type DocumentType } from './uploadCategories'
 
+// UploadDocumentDialog 是“上传课程资料”的弹窗组件。
+// 它负责选择文件、选择资料类型、显示上传进度、调用后端上传接口。
 export function UploadDocumentDialog({
+  // courseId 告诉后端要把文件上传到哪一门课程。
   courseId,
+  // open 决定弹窗是否显示。false 时组件直接返回 null，不渲染任何内容。
   open,
+  // initialDocumentType 是弹窗打开时默认选中的资料类型。
   initialDocumentType,
+  // allowedDocumentTypes 控制当前场景允许上传哪些资料类型。
   allowedDocumentTypes,
+  // chapterId 表示资料要归属到哪个章节；可能为空，表示未分章节。
   chapterId,
+  // onUploaded 是上传成功后的回调，父组件可用它刷新页面或关闭引导。
   onUploaded,
+  // onClose 是关闭弹窗的回调，由父组件控制 open 状态。
   onClose,
 }: {
   courseId: string | undefined
@@ -23,33 +32,49 @@ export function UploadDocumentDialog({
   onUploaded?: () => void
   onClose: () => void
 }) {
+  // file 保存用户选择的本地文件。初始为 null，表示还没选文件。
   const [file, setFile] = useState<File | null>(null)
+  // documentType 保存当前选中的资料分类，例如教材、课件、笔记等。
   const [documentType, setDocumentType] = useState<DocumentType>(initialDocumentType)
+  // progress 保存上传进度，例如 uploading 35% 或 saving 100%。
   const [progress, setProgress] = useState<UploadProgress | null>(null)
+  // useUploadDocument 封装上传接口。upload.mutate 会发请求；upload.isPending 表示正在上传。
   const upload = useUploadDocument(courseId)
 
   useEffect(() => {
+    // 弹窗没打开时，不需要绑定键盘事件，也不需要初始化状态。
     if (!open) return
+    // 每次打开弹窗，都重置为父组件传入的默认资料类型，并清空上一次上传进度。
     setDocumentType(initialDocumentType)
     setProgress(null)
     function closeOnEscape(event: KeyboardEvent) {
+      // event.key === 'Escape' 表示用户按了 Esc 键。
+      // 上传中不允许关闭，是为了避免用户误以为上传被正常取消或完成。
       if (event.key === 'Escape' && !upload.isPending) onClose()
     }
     window.addEventListener('keydown', closeOnEscape)
+    // return 里的函数叫“清理函数”。组件关闭或依赖变化时会执行，避免重复绑定事件。
     return () => window.removeEventListener('keydown', closeOnEscape)
   }, [initialDocumentType, open, onClose, upload.isPending])
 
+  // React 组件返回 null 表示什么都不显示。
   if (!open) return null
 
   function handleSubmit(event: FormEvent) {
+    // 阻止浏览器默认表单提交刷新页面，改用前端异步上传。
     event.preventDefault()
+    // 没选文件时直接退出，不调用接口。
     if (!file) return
     upload.mutate(
+      // 第一个参数是 mutationFn 需要的数据。
+      // onProgress: setProgress 表示上传函数每次拿到进度时，直接更新本组件 progress 状态。
       { file, documentType, chapterId, onProgress: setProgress },
       {
+        // 第二个参数是本次请求的回调配置。上传成功后清空文件并关闭弹窗。
         onSuccess: () => {
           setFile(null)
           onClose()
+          // ?. 表示如果父组件传了 onUploaded 就调用；没传也不会报错。
           onUploaded?.()
         },
       },
@@ -80,6 +105,11 @@ export function UploadDocumentDialog({
             <Upload className="mx-auto size-6 text-blue-600" />
             <span className="mt-2 block text-sm font-medium text-slate-800">{file ? file.name : '选择一份课程资料'}</span>
             <span className="mt-1 block text-xs text-slate-500">PDF · PPTX · TXT · MD</span>
+            {/*
+              accept 告诉浏览器文件选择器优先展示这些格式；真正安全校验仍然要以后端为准。
+              event.target.files 是用户选中的文件列表；?.[0] 取第一份文件。
+              ?? null 表示没选到文件时保存 null。
+            */}
             <input
               className="sr-only"
               type="file"
